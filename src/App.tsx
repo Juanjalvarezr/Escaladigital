@@ -28,7 +28,6 @@ import GuestJourneyPage from './pages/GuestJourneyPage';
 import { DiagnosticResult } from './services/gemini';
 import { flushLearningEventQueue, getCompanyIdForUser, recordLearningEvent } from './services/learningEvents';
 import { readGuestWorkshopProgress, readUserDiagnostic, writeUserDiagnostic } from './utils/userScopedStorage';
-import { NicheOnboarding } from './components/ui/NicheOnboarding';
 import { BadgeNotification } from './components/ui/BadgeNotification';
 
 const hasPendingGuestReturn = () => {
@@ -291,7 +290,7 @@ const AppContent: React.FC = () => {
 
         success('¡Ruta generada!', 'Tu plan ya está listo. Empieza con el primer taller.');
         setStep('app');
-        navigate('/mi-ruta');
+        navigate('/dashboard');
       } catch (e: any) {
         console.error('Error generating diagnostic:', e);
         if (!mounted) return;
@@ -320,7 +319,13 @@ const AppContent: React.FC = () => {
 
   // Paso 1: Pantalla de bienvenida
   if (step === 'welcome') {
-    return <WelcomeScreen onContinue={() => setStep('form')} onSkip={() => setStep('app')} />;
+    return <WelcomeScreen
+      onContinue={() => setStep('form')}
+      onSkip={() => {
+        setStep('app');
+        navigate('/dashboard');
+      }}
+    />;
   }
 
   // Paso 2: Formulario usuario/actividad
@@ -378,7 +383,6 @@ const AppContent: React.FC = () => {
   return (
     <div className="min-h-screen bg-dark-bg text-white">
       {/* Global UX overlays */}
-      {user && <NicheOnboarding />}
       <BadgeNotification />
 
       <Routes>
@@ -386,7 +390,7 @@ const AppContent: React.FC = () => {
         <Route path="/mi-ruta" element={<GuestJourneyPage />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/diagnostic" element={isRegisteredUser ? <SupabaseDiagnostic onComplete={() => {}} /> : <Navigate to="/" />} />
-        <Route path="/dashboard" element={isRegisteredUser ? <DashboardPage /> : <Navigate to={hasSavedGuestJourney() ? '/mi-ruta' : '/'} />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/academia-procesos" element={isRegisteredUser ? <ProcessAcademyPage /> : <Navigate to="/" />} />
         <Route path="/area/:areaId" element={isRegisteredUser ? <AreaPage /> : <Navigate to={hasSavedGuestJourney() ? '/mi-ruta' : '/'} />} />
         <Route path="/module/:moduleId" element={<LegacyModuleRoute />} />

@@ -19,14 +19,14 @@ const WelcomeScreen: React.FC<{ onContinue: () => void; onSkip?: () => void }> =
           className="w-full px-6 py-4 font-semibold text-white bg-gradient-to-r from-electric-blue to-violet rounded-xl shadow-lg hover:opacity-90 transform hover:-translate-y-1 transition-all duration-200"
           onClick={onContinue}
         >
-          Iniciar Diagnóstico IA
+          Completar diagnóstico
         </button>
         {onSkip && (
           <button
             className="w-full px-6 py-4 font-semibold text-gray-300 bg-dark-tertiary bg-opacity-50 border border-gray-700 rounded-xl hover:bg-gray-800 hover:text-white transition-all duration-200"
             onClick={onSkip}
           >
-            Ir directo al Dashboard
+            Ver dashboard sin completar diagnóstico
           </button>
         )}
       </div>

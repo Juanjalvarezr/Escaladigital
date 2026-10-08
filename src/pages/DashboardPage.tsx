@@ -23,6 +23,18 @@ interface ProgressData {
   };
 }
 
+const createEmptyProgress = (): ProgressData => Object.fromEntries(
+  BUSINESS_AREAS.map((area) => {
+    const moduleCount = MODULE_CATALOG[area.id]?.length || 0;
+    return [area.id, {
+      completedLessons: 0,
+      totalLessons: moduleCount * LESSONS_PER_MODULE,
+      completedQuizzes: 0,
+      totalQuizzes: moduleCount * QUIZZES_PER_MODULE
+    }];
+  })
+);
+
 const DashboardPage: React.FC = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -35,11 +47,15 @@ const DashboardPage: React.FC = () => {
   useEffect(() => {
     recordActivity();
 
-    setDiagnostic(readUserDiagnostic<DiagnosticResult>(user?.id));
+    setDiagnostic(readUserDiagnostic<DiagnosticResult>(user?.id) || readUserDiagnostic<DiagnosticResult>(null));
+
+    if (!user?.email || user.id.startsWith('guest_')) {
+      setProgress(createEmptyProgress());
+      setLoading(false);
+      return;
+    }
 
     const loadRealProgress = async () => {
-      if (!user) return;
-
       try {
         setLoading(true);
         const { data: diagnosticData, error: diagnosticError } = await supabase
@@ -70,16 +86,7 @@ const DashboardPage: React.FC = () => {
           .select('module_id, completion_percentage, lessons_completed, status')
           .eq('user_id', user.id);
 
-        const zeroProgress: ProgressData = {};
-        BUSINESS_AREAS.forEach(area => {
-          const moduleCount = MODULE_CATALOG[area.id]?.length || 0;
-          zeroProgress[area.id] = {
-            completedLessons: 0,
-            totalLessons: moduleCount * LESSONS_PER_MODULE,
-            completedQuizzes: 0,
-            totalQuizzes: moduleCount * QUIZZES_PER_MODULE
-          };
-        });
+        const zeroProgress = createEmptyProgress();
 
         if (error) {
           setProgress(zeroProgress);
@@ -135,17 +142,7 @@ const DashboardPage: React.FC = () => {
         setProgress(realProgress);
       } catch (error) {
         console.warn('Could not load user progress', error);
-        const fallback: ProgressData = {};
-        BUSINESS_AREAS.forEach(area => {
-          const moduleCount = MODULE_CATALOG[area.id]?.length || 0;
-          fallback[area.id] = {
-            completedLessons: 0,
-            totalLessons: moduleCount * LESSONS_PER_MODULE,
-            completedQuizzes: 0,
-            totalQuizzes: moduleCount * QUIZZES_PER_MODULE
-          };
-        });
-        setProgress(fallback);
+        setProgress(createEmptyProgress());
       } finally {
         setLoading(false);
       }
@@ -285,17 +282,18 @@ const DashboardPage: React.FC = () => {
           <p className="text-xs font-bold uppercase tracking-wider text-violet">Tu siguiente avance</p>
           <h3 id="next-step-title" className="mt-1 text-lg font-bold">
             {!diagnostic ? 'Descubre tu punto de partida' : completedLessonsTotal === 0 ? 'Convierte tu diagnóstico en una acción' : 'Continúa con tu siguiente lección'}
+              {!diagnostic ? 'Empieza con un diagnóstico, cuando quieras' : completedLessonsTotal === 0 ? 'Convierte tu diagnóstico en una acción' : 'Continúa con tu siguiente lección'}
           </h3>
           <p className="mt-1 text-sm text-gray-300">
-            {!diagnostic
-              ? 'Completa el diagnóstico para recibir una ruta adaptada a tu empresa.'
-              : completedLessonsTotal === 0
-                ? 'Tu ruta ya está creada. Empieza una lección breve y aplica una recomendación hoy.'
-                : `Llevas ${completedLessonsTotal} lección${completedLessonsTotal === 1 ? '' : 'es'} completada${completedLessonsTotal === 1 ? '' : 's'}. Elige un pilar para seguir avanzando.`}
+              {!diagnostic
+                ? 'Completa el diagnóstico para recibir una ruta adaptada a tu empresa.'
+                : completedLessonsTotal === 0
+                  ? 'Tu ruta ya está creada. Empieza una lección breve y aplica una recomendación hoy.'
+                  : `Llevas ${completedLessonsTotal} lección${completedLessonsTotal === 1 ? '' : 'es'} completada${completedLessonsTotal === 1 ? '' : 's'}. Elige un pilar para seguir avanzando.`}
           </p>
           <button
             type="button"
-            onClick={() => navigate(!diagnostic ? '/diagnostic' : '/area/finance')}
+            onClick={() => navigate(!diagnostic ? '/?start=diagnostic' : `/area/${diagnostic.recommendedModules?.[0] || 'finance'}`)}
             className="mt-4 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold hover:bg-violet-500"
           >
             {!diagnostic ? 'Completar diagnóstico' : 'Continuar aprendizaje'}
