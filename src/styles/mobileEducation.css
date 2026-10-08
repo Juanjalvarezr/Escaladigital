@@ -1,0 +1,110 @@
+/*
+ * Mobile learning surfaces only:
+ * - keep navigation controls reachable with a 44px touch target;
+ * - make progress legible without changing the progress value;
+ * - respect safe areas and landscape orientation on small screens.
+ */
+.education-module-carousel {
+  width: 100%;
+  padding-inline: 0.25rem;
+}
+
+.education-module-carousel__viewport {
+  width: min(100%, 26rem);
+}
+
+.education-module-carousel__controls {
+  width: min(100%, 26rem);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.education-module-carousel__button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.education-module-carousel__status {
+  min-width: 5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.education-lesson-nav {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+
+.education-lesson-nav__progress-bar {
+  min-height: 0.5rem;
+}
+
+.education-lesson-nav__actions {
+  gap: 0.75rem;
+}
+
+.education-lesson-nav :where(button, a, input):focus-visible,
+.education-module-carousel :where(button, a, input):focus-visible {
+  outline: 3px solid #00c3ff;
+  outline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+  .education-lesson-nav {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  .education-lesson-nav__row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.875rem;
+  }
+
+  .education-lesson-nav__breadcrumbs {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .education-lesson-nav__actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .education-lesson-nav__actions > button {
+    min-height: 2.75rem;
+  }
+}
+
+@media (orientation: landscape) and (max-width: 900px) {
+  .education-lesson-nav {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    padding-top: 0.75rem;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  }
+
+  .education-lesson-nav__row {
+    align-items: center;
+  }
+
+  .education-lesson-nav__actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .education-lesson-nav *,
+  .education-module-carousel * {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

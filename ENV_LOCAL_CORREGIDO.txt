@@ -1,0 +1,9 @@
+# Configuración de API Keys para Escala Digital App
+# =====================================
+
+# Gemini AI API Key - COMPLETA Y FUNCIONAL
+REACT_APP_GEMINI_PROXY_URL=/api/gemini
+REACT_APP_SUPABASE_URL=https://your-project.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=your-supabase-anon-key
+
+# GEMINI_API_KEY debe configurarse únicamente en el servidor del proxy.
