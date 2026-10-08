@@ -20,12 +20,9 @@ const AdminFeedbackPanel: React.FC = () => {
   useEffect(() => {
     const fetchFeedbacks = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('module_feedback')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.rpc('get_platform_feedback');
       if (!error && data) {
-        setFeedbacks(data);
+        setFeedbacks(data as Feedback[]);
       }
       setLoading(false);
     };

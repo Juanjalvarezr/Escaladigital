@@ -85,13 +85,8 @@ const PlatformAdminPage: React.FC = () => {
         if (sumRes.data?.[0]) {
           setSummary(sumRes.data[0] as Summary);
         } else {
-          // Datos simulados/fallback si RPC no está desplegado aún en Supabase local
-          setSummary({
-            company_count: 12,
-            user_count: 85,
-            active_company_count: 9,
-            event_count_30d: 420
-          });
+          setSummary(null);
+          if (sumRes.error) setError('No se pudieron cargar las métricas reales. Revisa que las migraciones administrativas estén aplicadas.');
         }
 
         if (compRes.data) setCompanies(compRes.data as CompanyInsight[]);
@@ -210,16 +205,16 @@ const PlatformAdminPage: React.FC = () => {
               <div className="space-y-6">
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {[
-                    { title: 'Usuarios Registrados', value: summary?.user_count || 85, trend: '+18% este mes', icon: '👤', color: 'from-blue-500/20 to-indigo-500/10' },
-                    { title: 'Racha Promedio', value: '4.8 días', trend: 'Alta Retención', icon: '🔥', color: 'from-amber-500/20 to-orange-500/10' },
-                    { title: 'Tiempo de Sesión', value: '18.4 min', trend: 'Promedio diario', icon: '⏱️', color: 'from-emerald-500/20 to-teal-500/10' },
-                    { title: 'Eventos de Aprendizaje', value: summary?.event_count_30d || 420, trend: 'Últimos 30 días', icon: '⚡', color: 'from-purple-500/20 to-pink-500/10' }
+                    { title: 'Usuarios registrados', value: summary?.user_count ?? '—', detail: 'Total en Supabase', icon: '👤', color: 'from-blue-500/20 to-indigo-500/10' },
+                    { title: 'Empresas', value: summary?.company_count ?? '—', detail: 'Total en Supabase', icon: '🏢', color: 'from-amber-500/20 to-orange-500/10' },
+                    { title: 'Empresas activas', value: summary?.active_company_count ?? '—', detail: 'Planes activos o en prueba', icon: '⚡', color: 'from-emerald-500/20 to-teal-500/10' },
+                    { title: 'Eventos de aprendizaje', value: summary?.event_count_30d ?? '—', detail: 'Últimos 30 días', icon: '📈', color: 'from-cyan-500/20 to-blue-500/10' }
                   ].map((card, i) => (
                     <div key={i} className={`rounded-xl border border-gray-800 bg-gradient-to-br ${card.color} p-5 relative overflow-hidden`}>
                       <div className="flex items-center justify-between">
                         <span className="text-2xl">{card.icon}</span>
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-black/40 text-emerald-400">
-                          {card.trend}
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-black/40 text-gray-300">
+                          Supabase
                         </span>
                       </div>
                       <p className="text-3xl font-extrabold mt-3 text-white">{card.value}</p>
@@ -228,35 +223,10 @@ const PlatformAdminPage: React.FC = () => {
                   ))}
                 </div>
 
-                {/* Mapa de Progreso por Áreas Organizadas */}
+                {/* El desglose por área no está disponible hasta instrumentar la métrica en Supabase. */}
                 <div className="rounded-xl border border-gray-800 bg-dark-secondary p-6">
                   <h3 className="text-lg font-bold text-white mb-2">Progreso Global por Áreas de Negocio</h3>
-                  <p className="text-xs text-gray-400 mb-6">Nivel de completitud agregada de los usuarios en los 8 módulos principales.</p>
-                  
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {[
-                      { area: 'Ventas & Conversión', percent: 78, activeUsers: 45, color: 'bg-emerald-500' },
-                      { area: 'Marketing & Embudo', percent: 64, activeUsers: 38, color: 'bg-blue-500' },
-                      { area: 'Gerencia Estratégica', percent: 82, activeUsers: 51, color: 'bg-purple-500' },
-                      { area: 'Operaciones & Procesos', percent: 59, activeUsers: 30, color: 'bg-amber-500' },
-                      { area: 'Finanzas & Márgenes', percent: 48, activeUsers: 24, color: 'bg-pink-500' },
-                      { area: 'Tecnología & Herramientas', percent: 71, activeUsers: 40, color: 'bg-cyan-500' }
-                    ].map((item, idx) => (
-                      <div key={idx} className="bg-dark-bg/60 p-4 rounded-lg border border-gray-800/80">
-                        <div className="flex justify-between items-center text-sm font-semibold mb-2">
-                          <span>{item.area}</span>
-                          <span className="text-gray-400 text-xs">{item.activeUsers} usuarios activos</span>
-                        </div>
-                        <div className="w-full bg-gray-800 rounded-full h-2.5 overflow-hidden">
-                          <div className={`h-2.5 rounded-full ${item.color}`} style={{ width: `${item.percent}%` }} />
-                        </div>
-                        <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
-                          <span>Avance medio</span>
-                          <span className="font-bold text-white">{item.percent}%</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="text-sm text-gray-400">Esta métrica todavía no está conectada a una consulta agregada de progreso por área. No se muestran datos de ejemplo.</p>
                 </div>
               </div>
             )}
@@ -407,65 +377,25 @@ const PlatformAdminPage: React.FC = () => {
               <div className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="bg-dark-secondary border border-gray-800 p-5 rounded-xl">
-                    <p className="text-sm text-gray-400 font-medium">Tasa Global de Aprobación</p>
-                    <p className="text-3xl font-extrabold text-emerald-400 mt-2">87.5%</p>
-                    <p className="text-xs text-gray-500 mt-1">Evaluaciones aprobadas al primer intento</p>
+                    <p className="text-sm text-gray-400 font-medium">Diagnósticos guardados</p>
+                    <p className="text-3xl font-extrabold text-electric-blue mt-2">{content?.diagnostics_count ?? '—'}</p>
+                    <p className="text-xs text-gray-500 mt-1">Total registrado en Supabase</p>
                   </div>
                   <div className="bg-dark-secondary border border-gray-800 p-5 rounded-xl">
-                    <p className="text-sm text-gray-400 font-medium">Diagnósticos Inteligentes</p>
-                    <p className="text-3xl font-extrabold text-electric-blue mt-2">
-                      {content?.diagnostics_count || 14}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">Rutas únicas generadas por IA</p>
+                    <p className="text-sm text-gray-400 font-medium">Acciones completadas</p>
+                    <p className="text-3xl font-extrabold text-violet-400 mt-2">{content?.actions_completed_count ?? '—'}</p>
+                    <p className="text-xs text-gray-500 mt-1">Eventos registrados en Supabase</p>
                   </div>
                   <div className="bg-dark-secondary border border-gray-800 p-5 rounded-xl">
-                    <p className="text-sm text-gray-400 font-medium">Acciones Aplicadas en Negocio</p>
-                    <p className="text-3xl font-extrabold text-violet-400 mt-2">
-                      {content?.actions_completed_count || 96}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">Herramientas y listas verificadas</p>
+                    <p className="text-sm text-gray-400 font-medium">Cuestionarios configurados</p>
+                    <p className="text-3xl font-extrabold text-emerald-400 mt-2">{content?.quizzes_count ?? '—'}</p>
+                    <p className="text-xs text-gray-500 mt-1">Catálogo disponible en Supabase</p>
                   </div>
                 </div>
 
-                {/* Tabla de Fricción por Áreas */}
                 <div className="bg-dark-secondary border border-gray-800 rounded-xl p-6">
-                  <h3 className="text-lg font-bold text-white mb-4">Análisis de Fricción en Quizzes & Aprendizaje</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-gray-300">
-                      <thead className="bg-dark-bg text-gray-400 uppercase">
-                        <tr>
-                          <th className="p-3">Área de Negocio</th>
-                          <th className="p-3">Quizzes Tomados</th>
-                          <th className="p-3">Promedio Puntuación</th>
-                          <th className="p-3">Nivel de Dificultad</th>
-                          <th className="p-3">Estado de Fricción</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-800">
-                        <tr>
-                          <td className="p-3 font-semibold text-white">Ventas</td>
-                          <td className="p-3">124</td>
-                          <td className="p-3 text-emerald-400 font-bold">92%</td>
-                          <td className="p-3">Intermedio</td>
-                          <td className="p-3"><span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300">Fluido</span></td>
-                        </tr>
-                        <tr>
-                          <td className="p-3 font-semibold text-white">Finanzas & Costos</td>
-                          <td className="p-3">68</td>
-                          <td className="p-3 text-amber-400 font-bold">71%</td>
-                          <td className="p-3">Avanzado</td>
-                          <td className="p-3"><span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300">Fricción Media</span></td>
-                        </tr>
-                        <tr>
-                          <td className="p-3 font-semibold text-white">Operaciones</td>
-                          <td className="p-3">89</td>
-                          <td className="p-3 text-emerald-400 font-bold">85%</td>
-                          <td className="p-3">Básico</td>
-                          <td className="p-3"><span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300">Fluido</span></td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                  <h3 className="text-lg font-bold text-white mb-2">Análisis de resultados de quizzes</h3>
+                  <p className="text-sm text-gray-400">La aprobación y fricción por área no se reportan aún desde una métrica agregada segura. Se mostrarán cuando exista esa instrumentación; no se usan cifras de muestra.</p>
                 </div>
               </div>
             )}

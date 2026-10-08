@@ -52,6 +52,14 @@ Una Súper App de aprendizaje adaptativo y diagnóstico empresarial diseñada pa
 
 Para habilitar la persistencia del diagnóstico visitante y su primer taller, aplica `supabase/migrations/20261007000000_guest_journey_persistence.sql` después del esquema base en el SQL Editor de Supabase. La ruta sigue guardándose localmente si la sincronización remota no está disponible.
 
+Para habilitar las métricas administrativas y el acceso seguro al panel, aplica también las migraciones `20260908060000_product_hardening.sql`, `20260908070000_platform_admin_insights.sql` y `20261008000000_platform_admin_feedback.sql`. Autoriza administradores manualmente desde el SQL Editor con el UUID del usuario ya registrado en Supabase Auth; no uses metadata editable del perfil como permiso:
+
+```sql
+INSERT INTO public.platform_admins (user_id)
+VALUES ('UUID_DEL_USUARIO_ADMIN')
+ON CONFLICT (user_id) DO NOTHING;
+```
+
 Notas:
 - El esquema incluye soporte para **empresa** y **múltiples usuarios por empresa** (roles y áreas).
 - El esquema incluye tablas de **analítica** para entender: cuántos usuarios, de dónde vienen, qué ven, cuánto duran, y qué herramientas clican.

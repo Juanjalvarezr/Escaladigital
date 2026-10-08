@@ -23,6 +23,7 @@ import PublicDemoPage from './pages/PublicDemoPage';
 import AuthPage from './pages/AuthPage';
 import TeamPage from './pages/TeamPage';
 import PlatformAdminPage from './pages/PlatformAdminPage';
+import PlatformAdminRoute from './components/PlatformAdminRoute';
 import GuestJourneyPage from './pages/GuestJourneyPage';
 import { DiagnosticResult } from './services/gemini';
 import { flushLearningEventQueue, getCompanyIdForUser, recordLearningEvent } from './services/learningEvents';
@@ -119,7 +120,7 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!isSupabaseConfigured && !loading && !user) {
+    if (isSupabaseConfigured && !loading && !user) {
       signInAnonymous();
     }
   }, [user, loading]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -317,17 +318,6 @@ const AppContent: React.FC = () => {
     );
   }
 
-  if (!user && !isSupabaseConfigured) {
-    return (
-      <div className="min-h-screen bg-dark-bg text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-electric-blue mx-auto mb-4"></div>
-          <p className="text-gray-300">Iniciando sesión anónima...</p>
-        </div>
-      </div>
-    );
-  }
-
   // Paso 1: Pantalla de bienvenida
   if (step === 'welcome') {
     return <WelcomeScreen onContinue={() => setStep('form')} onSkip={() => setStep('app')} />;
@@ -406,9 +396,9 @@ const AppContent: React.FC = () => {
         <Route path="/area/:areaId/module/:moduleId/quiz" element={isRegisteredUser ? <QuizViewWrapper /> : <Navigate to="/auth?next=%2Fdashboard" />} />
         <Route path="/profile" element={isRegisteredUser ? <ProfilePage /> : <Navigate to="/auth?next=%2Fdashboard" />} />
         <Route path="/team" element={isRegisteredUser ? <TeamPage /> : <Navigate to="/auth?next=%2Fteam" />} />
-        <Route path="/platform-admin" element={<PlatformAdminPage />} />
+        <Route path="/platform-admin" element={<PlatformAdminRoute><PlatformAdminPage /></PlatformAdminRoute>} />
 
-        <Route path="/admin-feedback" element={<AdminFeedbackPanel />} />
+        <Route path="/admin-feedback" element={<PlatformAdminRoute><AdminFeedbackPanel /></PlatformAdminRoute>} />
         <Route path="/" element={loading ? (
           <div className="flex items-center justify-center min-h-screen">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>

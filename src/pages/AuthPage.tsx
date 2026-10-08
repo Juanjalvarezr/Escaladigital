@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/SupabaseAuthProvider';
+import { isSupabaseConfigured } from '../supabase';
 
 const readPendingPath = () => {
   try {
@@ -66,6 +67,10 @@ const AuthPage: React.FC = () => {
     event.preventDefault();
     setError(null);
     setMessage(null);
+    if (!isSupabaseConfigured) {
+      setError('El acceso todavía no está conectado. Configura REACT_APP_SUPABASE_URL y REACT_APP_SUPABASE_ANON_KEY en Vercel y vuelve a desplegar.');
+      return;
+    }
     setSubmitting(true);
 
     try {
@@ -100,6 +105,10 @@ const AuthPage: React.FC = () => {
   const sendMagicLink = async () => {
     setError(null);
     setMessage(null);
+    if (!isSupabaseConfigured) {
+      setError('El acceso todavía no está conectado. Configura REACT_APP_SUPABASE_URL y REACT_APP_SUPABASE_ANON_KEY en Vercel y vuelve a desplegar.');
+      return;
+    }
     setSubmitting(true);
     try {
       await signInWithMagicLink(email.trim());
