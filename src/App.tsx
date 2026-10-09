@@ -207,6 +207,7 @@ const AppContent: React.FC = () => {
             status: guestWorkshop.completed ? 'completed' : 'in_progress',
             completion_percentage: guestWorkshop.completed ? 100 : 25,
             lessons_completed: lessonsCompleted,
+            action_response: guestWorkshop.response,
             last_accessed: guestWorkshop.updatedAt,
             updated_at: guestWorkshop.updatedAt
           }, { onConflict: 'user_id,module_id' });
@@ -290,7 +291,7 @@ const AppContent: React.FC = () => {
 
         success('¡Ruta generada!', 'Tu plan ya está listo. Empieza con el primer taller.');
         setStep('app');
-        navigate('/dashboard');
+        navigate('/mi-ruta');
       } catch (e: any) {
         console.error('Error generating diagnostic:', e);
         if (!mounted) return;

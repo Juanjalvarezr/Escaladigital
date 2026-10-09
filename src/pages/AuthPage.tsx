@@ -23,6 +23,7 @@ const AuthPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, signInWithEmail, signUpWithEmail, signInWithMagicLink, claimCompanyInvitation } = useAuth();
+  const hasPermanentAccount = Boolean(user?.email && !user.is_anonymous && !user.id.startsWith('guest_'));
   const [mode, setMode] = useState<'signin' | 'signup'>('signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -58,10 +59,14 @@ const AuthPage: React.FC = () => {
   }, [requestedNextPath]);
 
   useEffect(() => {
-    if (user) {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, []);
+
+  useEffect(() => {
+    if (hasPermanentAccount) {
       navigate(nextPath, { replace: true });
     }
-  }, [navigate, nextPath, user]);
+  }, [navigate, nextPath, hasPermanentAccount]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -80,6 +85,7 @@ const AuthPage: React.FC = () => {
           displayName: name.trim(),
           company: company.trim()
         });
+        setMessage('Cuenta en proceso. Si Supabase solicita confirmar el correo, usa el enlace que te enviamos; tu ruta y el taller quedarán asociados a esta cuenta.');
         if (inviteToken) {
           try {
             await claimCompanyInvitation(inviteToken);
@@ -89,7 +95,7 @@ const AuthPage: React.FC = () => {
             console.error('Error claiming invitation after signup:', invitationError);
           }
         }
-        if (!inviteToken) setMessage('Cuenta creada. Revisa tu correo si Supabase solicita confirmación.');
+        if (hasPermanentAccount) navigate(nextPath, { replace: true });
       } else {
         await signInWithEmail(email.trim(), password);
         if (inviteToken) await claimCompanyInvitation(inviteToken);

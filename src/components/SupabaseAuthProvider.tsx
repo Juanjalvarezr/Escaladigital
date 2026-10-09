@@ -323,17 +323,28 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const signUpWithEmail = async (email: string, password: string, userData: Partial<User>) => {
     try {
+      const metadata = {
+        display_name: userData.displayName || null,
+        company: userData.company || null,
+        industry: userData.industry || null,
+        interests: userData.interests || []
+      };
+
+      if (session?.user.is_anonymous && user?.id === session.user.id) {
+        const { data, error } = await supabase.auth.updateUser({
+          email,
+          password,
+          data: metadata
+        });
+        if (error) throw error;
+        if (data.user && !data.user.is_anonymous) await loadUserProfile(data.user.id);
+        return;
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: {
-            display_name: userData.displayName || null,
-            company: userData.company || null,
-            industry: userData.industry || null,
-            interests: userData.interests || []
-          }
-        }
+        options: { data: metadata }
       });
 
       if (error) {

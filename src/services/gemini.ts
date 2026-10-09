@@ -353,16 +353,6 @@ export class GeminiService {
     const meta = this.moduleCurriculum[moduleId];
     const moduleName = meta?.name || moduleId;
 
-    const docs = (meta?.documents || []).slice(0, 6);
-    const docsText =
-      docs.length === 0
-        ? 'Temas sugeridos: (pendiente de configurar)'
-        : docs
-            .map((d) => `- ${d.title}: ${d.description} (Beneficio: ${d.benefit})`)
-            .join('\n');
-
-    const purposeText = meta?.purpose ? `${meta.purpose}\n\n` : '';
-
     const topics = (meta?.documents || []).slice(0, 6).map((d, i) => {
       // Create short actionable mini-course topic titles from document titles
       const base = `${moduleName}: ${d.title}`;
@@ -371,7 +361,7 @@ export class GeminiService {
 
     return {
       phase: `Módulo: ${moduleName}`,
-      description: `${purposeText}${docsText}`,
+      description: meta?.purpose || `Empieza con una acción práctica para mejorar ${moduleName.toLowerCase()} en tu negocio.`,
       priority,
       topics
     };
