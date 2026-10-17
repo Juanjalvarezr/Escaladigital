@@ -95,7 +95,16 @@ export const ReflectionPanel: React.FC<ReflectionPanelProps> = ({
     addXp(50, lang === 'es' ? 'Reflexión de módulo completada' : 'Module reflection completed');
     // Save weekly commitment
     if (weeklyCommitment.trim()) {
-      try { localStorage.setItem(`${storageKey}-commitment`, weeklyCommitment.trim()); } catch { /* ignore */ }
+      try { 
+        localStorage.setItem(`${storageKey}-commitment`, weeklyCommitment.trim()); 
+      } catch (error) {
+        console.warn('LocalStorage no disponible al guardar compromiso:', error);
+        try {
+          sessionStorage.setItem(`${storageKey}-commitment`, weeklyCommitment.trim());
+        } catch (sessionError) {
+          console.warn('SessionStorage tampoco disponible:', sessionError);
+        }
+      }
       saveWeeklyCommitment(lessonId, weeklyCommitment.trim());
     }
     setShowSummary(true);
@@ -247,7 +256,16 @@ export const ReflectionPanel: React.FC<ReflectionPanelProps> = ({
             value={weeklyCommitment}
             onChange={e => {
               setWeeklyCommitment(e.target.value);
-              try { localStorage.setItem(`${storageKey}-commitment`, e.target.value); } catch { /* ignore */ }
+              try { 
+                localStorage.setItem(`${storageKey}-commitment`, e.target.value); 
+              } catch (error) {
+                console.warn('LocalStorage no disponible al guardar compromiso:', error);
+                try {
+                  sessionStorage.setItem(`${storageKey}-commitment`, e.target.value);
+                } catch (sessionError) {
+                  console.warn('SessionStorage tampoco disponible:', sessionError);
+                }
+              }
             }}
             disabled={submitted}
             placeholder={`Escribe UNA cosa concreta que vas a implementar en ${displayName} esta semana a partir de lo que aprendiste hoy...`}

@@ -37,6 +37,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [authError, setAuthError] = useState<string | null>(null);
   const signInAnonymousInFlightRef = useRef<Promise<void> | null>(null);
   const lastAnonymousAttemptAtRef = useRef<number>(0);
+  const initialSessionLoadedRef = useRef(false);
 
   const formatUnknownError = useCallback((err: unknown, fallback: string) => {
     if (err instanceof Error) return err.message;
@@ -220,16 +221,23 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
 
         setLoading(false);
+        initialSessionLoadedRef.current = true;
       } catch (error) {
         console.error('Error in getInitialSession:', error);
         setAuthError(formatUnknownError(error, 'Error obteniendo sesión inicial'));
         setLoading(false);
+        initialSessionLoadedRef.current = true;
       }
     };
 
     getInitialSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      // Skip processing if initial session is still loading to prevent race condition
+      if (!initialSessionLoadedRef.current) {
+        return;
+      }
+
       setSession(session);
 
       if (session?.user) {

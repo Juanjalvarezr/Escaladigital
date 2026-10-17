@@ -69,6 +69,24 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
     ]);
   };
 
+  const withRetry = async <T,>(
+    fn: () => Promise<T>,
+    maxRetries: number = 2,
+    baseDelayMs: number = 2000
+  ): Promise<T> => {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        if (attempt === maxRetries - 1) throw error;
+        const delay = baseDelayMs * Math.pow(2, attempt); // Exponential backoff
+        console.warn(`Intento ${attempt + 1} falló, reintentando en ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    throw new Error('Máximo de reintentos alcanzado');
+  };
+
   const handleInputChange = (field: keyof DiagnosticFormData, value: string | string[]) => {
     setFormData(prev => {
       const next = {
@@ -78,8 +96,14 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
 
       try {
         window.localStorage.setItem(STORAGE_FORM_KEY, JSON.stringify(next));
-      } catch {
-        // ignore
+      } catch (error) {
+        console.warn('LocalStorage no disponible al guardar formulario:', error);
+        // Fallback: intentar sessionStorage
+        try {
+          sessionStorage.setItem(STORAGE_FORM_KEY, JSON.stringify(next));
+        } catch (sessionError) {
+          console.warn('SessionStorage tampoco disponible:', sessionError);
+        }
       }
 
       return next;
@@ -97,8 +121,14 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
 
       try {
         window.localStorage.setItem(STORAGE_FORM_KEY, JSON.stringify(next));
-      } catch {
-        // ignore
+      } catch (error) {
+        console.warn('LocalStorage no disponible al guardar formulario:', error);
+        // Fallback: intentar sessionStorage
+        try {
+          sessionStorage.setItem(STORAGE_FORM_KEY, JSON.stringify(next));
+        } catch (sessionError) {
+          console.warn('SessionStorage tampoco disponible:', sessionError);
+        }
       }
 
       return next;
@@ -123,10 +153,15 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
 
     try {
       const businessContext = `${formData.contactName} - ${formData.companyName}. ${formData.industry}. ${formData.businessDescription}`;
-      const baseResult = await withTimeout(
-        geminiService.analyzeBusiness({ description: businessContext, goals: formData.mainChallenge, actividad: formData.industry }),
-        25_000,
-        'Tiempo de espera agotado al generar tu ruta (25s).'
+      
+      const baseResult = await withRetry(
+        () => withTimeout(
+          geminiService.analyzeBusiness({ description: businessContext, goals: formData.mainChallenge, actividad: formData.industry }),
+          45_000, // Aumentado a 45 segundos
+          'Tiempo de espera agotado al generar tu ruta (45s). Por favor intenta de nuevo.'
+        ),
+        2, // 2 reintentos
+        3000 // 3 segundos de delay base
       );
 
       const mergedModules = Array.from(
@@ -143,8 +178,13 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
 
       try {
         window.localStorage.setItem(STORAGE_RESULT_KEY, JSON.stringify(result));
-      } catch {
-        // ignore
+      } catch (error) {
+        console.warn('LocalStorage no disponible al guardar resultado:', error);
+        try {
+          sessionStorage.setItem(STORAGE_RESULT_KEY, JSON.stringify(result));
+        } catch (sessionError) {
+          console.warn('SessionStorage tampoco disponible:', sessionError);
+        }
       }
       
       // Save diagnostic result to Supabase
