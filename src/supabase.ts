@@ -1,25 +1,27 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = 'https://hmafzvpokkiwetstajqv.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtYWZ6dnBva2tpd2V0c3RhanF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MDkzNzksImV4cCI6MjA4NzA4NTM3OX0.IGhAfKtMyfo29W3fyhMJGaYLb4NOqdjrPtingXzEbgw'
+const configuredSupabaseUrl = process.env.REACT_APP_SUPABASE_URL
+const configuredSupabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY
+export const isSupabaseConfigured = Boolean(configuredSupabaseUrl && configuredSupabaseAnonKey)
+const supabaseUrl = configuredSupabaseUrl || 'https://example.supabase.co'
+const supabaseAnonKey = configuredSupabaseAnonKey || 'demo-anon-key'
 
-const isLocalhost =
-  typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+if (!isSupabaseConfigured) {
+  console.warn('Supabase env variables not configured. Add REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY to your .env file.')
+}
+
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: isLocalhost
-    ? {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false
-      }
-    : {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-      }
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    lock: async (_name, _acquireTimeout, fn) => {
+      return await fn();
+    }
+  }
 })
+
 
 // Types for our database
 export interface Database {
@@ -355,6 +357,191 @@ export interface Database {
           source_id?: string
           metadata?: Record<string, any>
           created_at?: string
+        }
+      }
+      company_profiles: {
+        Row: {
+          company_id: string
+          legal_name: string | null
+          industry: string | null
+          company_size: string | null
+          country_code: string | null
+          city: string | null
+          website: string | null
+          business_model: string | null
+          description: string | null
+          primary_challenge: string | null
+          goals: any[]
+          profile_version: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          legal_name?: string | null
+          industry?: string | null
+          company_size?: string | null
+          country_code?: string | null
+          city?: string | null
+          website?: string | null
+          business_model?: string | null
+          description?: string | null
+          primary_challenge?: string | null
+          goals?: any[]
+          profile_version?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          legal_name?: string | null
+          industry?: string | null
+          company_size?: string | null
+          country_code?: string | null
+          city?: string | null
+          website?: string | null
+          business_model?: string | null
+          description?: string | null
+          primary_challenge?: string | null
+          goals?: any[]
+          profile_version?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      learning_events: {
+        Row: {
+          id: string
+          company_id: string
+          user_id: string | null
+          event_type: string
+          module_key: string | null
+          lesson_key: string | null
+          quiz_key: string | null
+          session_id: string | null
+          event_properties: Record<string, any>
+          occurred_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          user_id?: string | null
+          event_type: string
+          module_key?: string | null
+          lesson_key?: string | null
+          quiz_key?: string | null
+          session_id?: string | null
+          event_properties?: Record<string, any>
+          occurred_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          user_id?: string | null
+          event_type?: string
+          module_key?: string | null
+          lesson_key?: string | null
+          quiz_key?: string | null
+          session_id?: string | null
+          event_properties?: Record<string, any>
+          occurred_at?: string
+          created_at?: string
+        }
+      }
+      business_processes: {
+        Row: {
+          id: string
+          company_id: string
+          process_key: string
+          name: string
+          area_key: string | null
+          description: string | null
+          owner_user_id: string | null
+          status: 'draft' | 'active' | 'paused' | 'archived'
+          metadata: Record<string, any>
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          process_key: string
+          name: string
+          area_key?: string | null
+          description?: string | null
+          owner_user_id?: string | null
+          status?: 'draft' | 'active' | 'paused' | 'archived'
+          metadata?: Record<string, any>
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          process_key?: string
+          name?: string
+          area_key?: string | null
+          description?: string | null
+          owner_user_id?: string | null
+          status?: 'draft' | 'active' | 'paused' | 'archived'
+          metadata?: Record<string, any>
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      business_actions: {
+        Row: {
+          id: string
+          company_id: string
+          process_id: string | null
+          owner_user_id: string | null
+          horizon_days: 30 | 60 | 90
+          action_key: string
+          title: string
+          description: string | null
+          status: 'planned' | 'in_progress' | 'done' | 'cancelled'
+          due_on: string | null
+          completed_at: string | null
+          sort_order: number
+          metadata: Record<string, any>
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          process_id?: string | null
+          owner_user_id?: string | null
+          horizon_days: 30 | 60 | 90
+          action_key: string
+          title: string
+          description?: string | null
+          status?: 'planned' | 'in_progress' | 'done' | 'cancelled'
+          due_on?: string | null
+          completed_at?: string | null
+          sort_order?: number
+          metadata?: Record<string, any>
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          process_id?: string | null
+          owner_user_id?: string | null
+          horizon_days?: 30 | 60 | 90
+          action_key?: string
+          title?: string
+          description?: string | null
+          status?: 'planned' | 'in_progress' | 'done' | 'cancelled'
+          due_on?: string | null
+          completed_at?: string | null
+          sort_order?: number
+          metadata?: Record<string, any>
+          created_at?: string
+          updated_at?: string
         }
       }
     }

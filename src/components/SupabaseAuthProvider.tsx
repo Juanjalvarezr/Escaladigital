@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../supabase';
 import { User } from '../types';
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
@@ -14,6 +14,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, userData: Partial<User>) => Promise<void>;
+  claimCompanyInvitation: (token: string) => Promise<void>;
   logout: () => Promise<void>;
   signOut: () => Promise<void>;
   updateUserProfile: (data: Partial<User>) => Promise<void>;
@@ -37,20 +38,22 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const signInAnonymousInFlightRef = useRef<Promise<void> | null>(null);
   const lastAnonymousAttemptAtRef = useRef<number>(0);
 
-  const formatUnknownError = (err: unknown, fallback: string) => {
+  const formatUnknownError = useCallback((err: unknown, fallback: string) => {
     if (err instanceof Error) return err.message;
     try {
       return JSON.stringify(err);
     } catch {
       return fallback;
     }
-  };
+  }, []);
 
   const signInWithMagicLink = async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined
+        emailRedirectTo: typeof window !== 'undefined'
+          ? `${window.location.origin}/auth?next=%2Fdiagnostic`
+          : undefined
       }
     });
 
@@ -74,55 +77,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const clearAuthError = () => setAuthError(null);
 
-  useEffect(() => {
-    const getInitialSession = async () => {
-      try {
-        const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
-          let timeoutId: number | undefined;
-          const timeoutPromise = new Promise<T>((_, reject) => {
-            timeoutId = window.setTimeout(() => reject(new Error('Timeout obteniendo sesión (posible lock del navegador)')), ms);
-          });
-
-          try {
-            return await Promise.race([promise, timeoutPromise]);
-          } finally {
-            if (timeoutId) window.clearTimeout(timeoutId);
-          }
-        };
-
-        const { data: { session } } = await withTimeout(supabase.auth.getSession(), 7000);
-        setSession(session);
-        
-        if (session?.user) {
-          await loadUserProfile(session.user.id);
-        }
-        
-        setLoading(false);
-      } catch (error) {
-        console.error('Error in getInitialSession:', error);
-        setAuthError(formatUnknownError(error, 'Error obteniendo sesión inicial'));
-        setLoading(false);
-      }
-    };
-
-    getInitialSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session);
-      
-      if (session?.user) {
-        await loadUserProfile(session.user.id);
-      } else {
-        setUser(null);
-      }
-      
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const ensureCompanyForUser = async (userId: string, displayName?: string): Promise<string | undefined> => {
+  const ensureCompanyForUser = useCallback(async (userId: string, displayName?: string): Promise<string | undefined> => {
     try {
       const { data: current, error: currentError } = await supabase
         .from('users')
@@ -131,7 +86,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         .single();
 
       if (currentError && currentError.code !== 'PGRST116') {
-        return undefined;
+        throw currentError;
       }
 
       if (current?.default_company_id) {
@@ -151,31 +106,32 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         .single();
 
       if (companyError || !createdCompany?.id) {
-        return undefined;
+        throw companyError || new Error('No se pudo crear la empresa del usuario.');
       }
 
       const companyId = createdCompany.id as string;
 
-      await supabase.from('company_members').insert({
+      const { error: membershipError } = await supabase.from('company_members').insert({
         company_id: companyId,
         user_id: userId,
         role: 'owner',
         areas: []
       });
+      if (membershipError) throw membershipError;
 
-      await supabase
+      const { error: userUpdateError } = await supabase
         .from('users')
         .update({ default_company_id: companyId })
         .eq('id', userId);
+      if (userUpdateError) throw userUpdateError;
 
       return companyId;
     } catch {
-      // ignore
       return undefined;
     }
-  };
+  }, []);
 
-  const loadUserProfile = async (userId: string) => {
+  const loadUserProfile = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('users')
@@ -191,7 +147,13 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (data) {
         const ensuredCompanyId = await ensureCompanyForUser(data.id, data.display_name);
-        setUser(data);
+        setUser({
+          ...data,
+          user_metadata: {
+            ...(data.user_metadata || {}),
+            defaultCompanyId: ensuredCompanyId || data.default_company_id
+          }
+        });
       } else {
         const { error: insertError } = await supabase
           .from('users')
@@ -206,7 +168,6 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
           setAuthError(insertError.message || 'Error creando perfil de usuario');
         } else {
           const ensuredCompanyId = await ensureCompanyForUser(userId);
-          // Create basic user object for new users
           const newUser = {
             id: userId,
             created_at: new Date().toISOString(),
@@ -220,7 +181,68 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.error('Error in loadUserProfile:', error);
       setAuthError(formatUnknownError(error, 'Error cargando perfil de usuario'));
     }
-  };
+  }, [ensureCompanyForUser, formatUnknownError]);
+
+  useEffect(() => {
+    const getInitialSession = async () => {
+      try {
+        const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
+          let timeoutId: number | undefined;
+          const timeoutPromise = new Promise<T>((_, reject) => {
+            timeoutId = window.setTimeout(() => reject(new Error('Timeout obteniendo sesión (posible lock del navegador)')), ms);
+          });
+
+          try {
+            return await Promise.race([promise, timeoutPromise]);
+          } finally {
+            if (timeoutId) window.clearTimeout(timeoutId);
+          }
+        };
+
+        const { data: { session } } = await withTimeout(supabase.auth.getSession(), 7000);
+        setSession(session);
+
+        if (session?.user) {
+          await loadUserProfile(session.user.id);
+        } else {
+          const guestId = window.localStorage.getItem('escala:guest_id');
+          if (guestId) {
+            setUser({
+              id: guestId,
+              email: 'lider@escaladigital.app',
+              user_metadata: { name: 'Líder Emprendedor', company: 'Mi Empresa' },
+              created_at: new Date().toISOString(),
+              last_login: new Date().toISOString()
+            } as any);
+          } else {
+            setUser(null);
+          }
+        }
+
+        setLoading(false);
+      } catch (error) {
+        console.error('Error in getInitialSession:', error);
+        setAuthError(formatUnknownError(error, 'Error obteniendo sesión inicial'));
+        setLoading(false);
+      }
+    };
+
+    getInitialSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSession(session);
+
+      if (session?.user) {
+        await loadUserProfile(session.user.id);
+      } else {
+        setUser(null);
+      }
+
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [formatUnknownError, loadUserProfile]);
 
   const signInAnonymous = async () => {
     if (signInAnonymousInFlightRef.current) {
@@ -240,16 +262,36 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const { data, error } = await supabase.auth.signInAnonymously();
 
         if (error) {
-          console.error('Error signing in anonymously:', error);
-          setAuthError(error.message || 'Error iniciando sesión anónima');
+          console.warn('Anonymous sign in not enabled in Supabase, using resilient local user:', error);
+          const guestId = 'guest_' + (window.localStorage.getItem('escala:guest_id') || Math.random().toString(36).substring(2, 9));
+          window.localStorage.setItem('escala:guest_id', guestId);
+          setUser({
+            id: guestId,
+            email: 'lider@escaladigital.app',
+            user_metadata: { name: 'Líder Emprendedor', company: 'Mi Empresa' },
+            created_at: new Date().toISOString(),
+            last_login: new Date().toISOString()
+          } as any);
+          setLoading(false);
+          setAuthError('Supabase no está disponible. Estás usando el modo local; tus avances se guardan en este dispositivo.');
           return;
         }
 
         console.log('Anonymous sign in successful:', data);
-        setAuthError(null);
+        setAuthError('Supabase no está disponible. Estás usando el modo local; tus avances se guardan en este dispositivo.');
       } catch (error) {
-        console.error('Error in signInAnonymous:', error);
-        setAuthError(formatUnknownError(error, 'Error iniciando sesión anónima'));
+        console.warn('Error in signInAnonymous, using resilient local user:', error);
+        const guestId = 'guest_' + (window.localStorage.getItem('escala:guest_id') || Math.random().toString(36).substring(2, 9));
+        window.localStorage.setItem('escala:guest_id', guestId);
+        setUser({
+          id: guestId,
+          email: 'lider@escaladigital.app',
+          user_metadata: { name: 'Líder Emprendedor', company: 'Mi Empresa' },
+          created_at: new Date().toISOString(),
+          last_login: new Date().toISOString()
+        } as any);
+        setLoading(false);
+        setAuthError(null);
       } finally {
         signInAnonymousInFlightRef.current = null;
       }
@@ -281,9 +323,28 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const signUpWithEmail = async (email: string, password: string, userData: Partial<User>) => {
     try {
+      const metadata = {
+        display_name: userData.displayName || null,
+        company: userData.company || null,
+        industry: userData.industry || null,
+        interests: userData.interests || []
+      };
+
+      if (session?.user.is_anonymous && user?.id === session.user.id) {
+        const { data, error } = await supabase.auth.updateUser({
+          email,
+          password,
+          data: metadata
+        });
+        if (error) throw error;
+        if (data.user && !data.user.is_anonymous) await loadUserProfile(data.user.id);
+        return;
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
-        password
+        password,
+        options: { data: metadata }
       });
 
       if (error) {
@@ -291,26 +352,20 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         throw error;
       }
 
-      if (data.user) {
-        const { error: profileError } = await supabase
-          .from('users')
-          .insert({
-            id: data.user.id,
-            email: data.user.email || userData.email,
-            display_name: userData.displayName,
-            company: userData.company,
-            industry: userData.industry,
-            interests: userData.interests,
-            created_at: new Date().toISOString(),
-            last_login: new Date().toISOString()
-          });
-
-        if (profileError) {
-          console.error('Error creating user profile:', profileError);
-        }
+      // The database trigger creates public.users even when email confirmation
+      // delays the session required for an authenticated client insert.
+      if (data.user && data.session) {
+        await loadUserProfile(data.user.id);
       }
     } catch (error) {
       console.error('Error in signUpWithEmail:', error);
+      throw error;
+    }
+  };
+
+  const claimCompanyInvitation = async (token: string) => {
+    const { error } = await supabase.rpc('claim_company_invitation', { p_token: token });
+    if (error) {
       throw error;
     }
   };
@@ -371,6 +426,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     signInWithGoogle,
     signInWithEmail,
     signUpWithEmail,
+    claimCompanyInvitation,
     logout,
     signOut: logout,
     updateUserProfile

@@ -3,6 +3,7 @@ import { geminiService, DiagnosticResult } from '../services/gemini';
 import { useAuth } from './SupabaseAuthProvider';
 import { supabase } from '../supabase';
 import { BUSINESS_AREAS } from '../types';
+import { getCompanyIdForUser, recordLearningEvent } from '../services/learningEvents';
 
 interface SupabaseDiagnosticEnhancedProps {
   onComplete: (result: DiagnosticResult) => void;
@@ -16,6 +17,8 @@ interface DiagnosticFormData {
   mainChallenge: string;
   interests: string[];
 }
+
+type AreaStatus = 'defined' | 'not_defined';
 
 const STORAGE_FORM_KEY = 'escala:diagnosticForm:v1';
 const STORAGE_RESULT_KEY = 'escala:latestDiagnosticResult:v1';
@@ -121,7 +124,7 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
     try {
       const businessContext = `${formData.contactName} - ${formData.companyName}. ${formData.industry}. ${formData.businessDescription}`;
       const baseResult = await withTimeout(
-        geminiService.analyzeBusiness(businessContext, formData.mainChallenge),
+        geminiService.analyzeBusiness({ description: businessContext, goals: formData.mainChallenge, actividad: formData.industry }),
         25_000,
         'Tiempo de espera agotado al generar tu ruta (25s).'
       );
@@ -132,7 +135,10 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
 
       const result: DiagnosticResult = {
         ...baseResult,
-        recommendedModules: mergedModules
+        recommendedModules: mergedModules,
+        organizationalAreas: Object.fromEntries(
+          BUSINESS_AREAS.map(area => [area.id, formData.interests.includes(area.id) ? 'defined' : 'not_defined'])
+        ) as Record<string, AreaStatus>
       };
 
       try {
@@ -158,6 +164,21 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
           console.error('Error saving diagnostic:', insertError);
           setError(`Se generó el plan, pero no se pudo guardar en Supabase: ${insertError.message}`);
         }
+
+        void recordLearningEvent({
+          companyId: getCompanyIdForUser(user),
+          userId: user.id,
+          eventType: 'diagnostic_completed',
+          eventProperties: {
+            businessType: result.businessType,
+            mainChallenge: result.mainChallenge,
+            recommendedModules: result.recommendedModules
+            ,
+            organizationalAreas: result.organizationalAreas,
+            selectedAreaCount: formData.interests.length,
+            totalAreaCount: BUSINESS_AREAS.length
+          }
+        });
 
         try {
           await updateUserProfile({
@@ -299,21 +320,26 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
             {/* Areas of Interest */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-4">
-                ¿Qué áreas te gustaría mejorar? * (Selecciona al menos una)
+                ¿Qué áreas de tu empresa ya identificas? * (Selecciona todas las que actualmente existen o reconoces)
               </label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {BUSINESS_AREAS.map((area) => {
-                  const isSelected = formData.interests.includes(area.id);
-                  return (
-                    <div
-                      key={area.id}
-                      onClick={() => handleInterestToggle(area.id)}
-                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
-                        isSelected
-                          ? 'bg-violet/20 border-violet text-white'
-                          : 'bg-dark-tertiary border-gray-600 text-gray-300 hover:border-violet/50'
-                      }`}
-                    >
+                <p className="mb-4 text-sm text-gray-400">
+                  No es una calificación. Esta respuesta nos ayuda a mostrarte qué tan completa está hoy la estructura de tu empresa y qué áreas conviene desarrollar para crecer.
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {BUSINESS_AREAS.map((area) => {
+                    const isSelected = formData.interests.includes(area.id);
+                    return (
+                      <button
+                        type="button"
+                        key={area.id}
+                        onClick={() => handleInterestToggle(area.id)}
+                        aria-pressed={isSelected}
+                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
+                          isSelected
+                            ? 'bg-violet/20 border-violet text-white'
+                            : 'bg-dark-tertiary border-gray-600 text-gray-300 hover:border-violet/50'
+                        }`}
+                      >
                       <div className="flex items-center space-x-3">
                         <span className="text-2xl">{area.icon}</span>
                         <div>
@@ -321,9 +347,21 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
                           <div className="text-xs opacity-75">{area.description}</div>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
+              </div>
+              <div className="mt-5 rounded-lg border border-gray-700 bg-dark-tertiary/60 p-4" role="status">
+                <p className="font-semibold text-white">
+                  {formData.interests.length === BUSINESS_AREAS.length
+                    ? 'Excelente: reconoces las 8 áreas clave de tu empresa.'
+                    : formData.interests.length >= 4
+                      ? `Reconoces ${formData.interests.length} de ${BUSINESS_AREAS.length} áreas. Tienes una base; revisaremos las restantes para fortalecer tu crecimiento.`
+                      : `Has identificado ${formData.interests.length} de ${BUSINESS_AREAS.length} áreas. Definir las demás puede ayudarte a organizar mejor y delegar.`}
+                </p>
+                <p className="mt-1 text-sm text-gray-400">
+                  Las áreas no seleccionadas no desaparecen: se convierten en oportunidades de desarrollo dentro de tu ruta.
+                </p>
               </div>
             </div>
 

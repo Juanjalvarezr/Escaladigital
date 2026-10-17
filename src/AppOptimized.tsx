@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { SupabaseAuthProvider, useAuth } from './components/SupabaseAuthProvider';
-import { SupabaseDiagnostic } from './components/SupabaseDiagnostic';
+import SupabaseDiagnostic from './components/SupabaseDiagnostic';
 import { ToastContainer, useToast } from './components/ToastNotification';
 import { cache, preloadCriticalRoutes, measurePerformance } from './utils/performance';
 import { DiagnosticResult } from './services/gemini';

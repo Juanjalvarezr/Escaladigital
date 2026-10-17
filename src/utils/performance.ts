@@ -85,7 +85,7 @@ export const retryWithBackoff = async <T>(
   maxRetries: number = 3,
   baseDelay: number = 1000
 ): Promise<T> => {
-  let lastError: Error;
+  let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -104,7 +104,7 @@ export const retryWithBackoff = async <T>(
     }
   }
 
-  throw lastError!;
+  throw lastError || new Error('La operación falló después de varios intentos');
 };
 
 // Optimización de imágenes

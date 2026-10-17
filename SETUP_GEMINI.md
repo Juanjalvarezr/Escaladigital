@@ -21,10 +21,11 @@ https://makersuite.google.com/app/apikey
 - **CÓPIALA COMPLETAMENTE** - es única e irrecuperable
 
 ### 5. 🔧 Configurar en la App
-1. Abre el archivo: `src/services/gemini.ts`
-2. Busca la línea: `const API_KEY = 'TU_API_KEY_REAL_AQUI';`
-3. **Reemplaza** `TU_API_KEY_REAL_AQUI` con tu API key real
-4. Guarda el archivo
+## 5. Configurar en el servidor
+1. Crea `server/gemini-proxy/.env` a partir de `server/gemini-proxy/.env.example`.
+2. Define `GEMINI_API_KEY` con la clave generada.
+3. Mantén esa clave solo en el servidor. No la agregues a `src/`, a archivos versionados ni a variables `REACT_APP_*`.
+4. Para desarrollo local, inicia el proxy junto con la app con `npm run start:dev`.
 
 ## ⚠️ IMPORTANTE
 
@@ -35,18 +36,14 @@ https://makersuite.google.com/app/apikey
 
 ## 🎯 Verificación
 
-Una vez configurada, la app mostrará:
-- ✅ `Gemini API Key configurada: ✅`
-- 🚀 Generación de contenido con IA funcionando
-- 📊 Diagnósticos personalizados
-- 🎓 Lecciones y quizzes generados dinámicamente
+Comprueba que `http://localhost:3001/health` responda y prueba la generación desde la app. En producción, despliega el proxy como servicio backend y configura `GEMINI_API_KEY` en el gestor de secretos del proveedor.
 
 ## 🆘 Soporte
 
 Si tienes problemas:
-1. Verifica que la API key esté completa
-2. Asegúrate de tener cuota disponible (Google da generosa cuota gratuita)
-3. Revisa que no haya espacios extra al pegar la key
+1. Verifica que el proxy responda en `/health`.
+2. Revisa los logs del servidor y la cuota de Google AI Studio.
+3. Confirma que `GEMINI_API_KEY` está configurada en el entorno del servidor, no en el bundle frontend.
 
 ## 🔄 Si la key no funciona
 

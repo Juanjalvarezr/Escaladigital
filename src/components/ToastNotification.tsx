@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info' | 'loading';
 
@@ -17,6 +17,25 @@ interface ToastProps {
   onRetry?: () => void;
 }
 
+type ToastRecord = Omit<ToastProps, 'onClose'>;
+interface ToastContextValue {
+  toasts: ToastRecord[];
+  addToast: (type: ToastType, title: string, message?: string, options?: ToastOptions) => string;
+  removeToast: (id: string) => void;
+  success: (title: string, message?: string, options?: ToastOptions) => string;
+  error: (title: string, message?: string, options?: ToastOptions) => string;
+  warning: (title: string, message?: string, options?: ToastOptions) => string;
+  info: (title: string, message?: string, options?: ToastOptions) => string;
+  loading: (title: string, message?: string) => string;
+}
+interface ToastOptions {
+  duration?: number;
+  action?: ToastProps['action'];
+  showRetry?: boolean;
+  onRetry?: () => void;
+}
+const ToastContext = createContext<ToastContextValue | null>(null);
+
 const ToastNotification: React.FC<ToastProps> = ({
   id,
   type,
@@ -31,6 +50,13 @@ const ToastNotification: React.FC<ToastProps> = ({
   const [isVisible, setIsVisible] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
+  const handleClose = React.useCallback(() => {
+    setIsLeaving(true);
+    setTimeout(() => {
+      onClose(id);
+    }, 300);
+  }, [id, onClose]);
+
   useEffect(() => {
     // Animación de entrada
     setIsVisible(true);
@@ -43,14 +69,7 @@ const ToastNotification: React.FC<ToastProps> = ({
 
       return () => clearTimeout(timer);
     }
-  }, [duration, type]);
-
-  const handleClose = () => {
-    setIsLeaving(true);
-    setTimeout(() => {
-      onClose(id);
-    }, 300);
-  };
+  }, [duration, handleClose, type]);
 
   const getIcon = () => {
     const iconClass = "w-5 h-5 flex-shrink-0";
@@ -164,34 +183,14 @@ const ToastNotification: React.FC<ToastProps> = ({
 };
 
 // Hook para manejar toasts
-export const useToast = () => {
-  const [toasts, setToasts] = useState<Array<{
-    id: string;
-    type: ToastType;
-    title: string;
-    message?: string;
-    duration?: number;
-    action?: {
-      label: string;
-      onClick: () => void;
-    };
-    showRetry?: boolean;
-    onRetry?: () => void;
-  }>>([]);
+const useToastState = (): ToastContextValue => {
+  const [toasts, setToasts] = useState<ToastRecord[]>([]);
 
   const addToast = (
     type: ToastType,
     title: string,
     message?: string,
-    options?: {
-      duration?: number;
-      action?: {
-        label: string;
-        onClick: () => void;
-      };
-      showRetry?: boolean;
-      onRetry?: () => void;
-    }
+    options?: ToastOptions
   ) => {
     const id = Date.now().toString();
     const newToast = {
@@ -210,16 +209,16 @@ export const useToast = () => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
 
-  const success = (title: string, message?: string, options?: any) =>
+  const success = (title: string, message?: string, options?: ToastOptions) =>
     addToast('success', title, message, options);
 
-  const error = (title: string, message?: string, options?: any) =>
+  const error = (title: string, message?: string, options?: ToastOptions) =>
     addToast('error', title, message, options);
 
-  const warning = (title: string, message?: string, options?: any) =>
+  const warning = (title: string, message?: string, options?: ToastOptions) =>
     addToast('warning', title, message, options);
 
-  const info = (title: string, message?: string, options?: any) =>
+  const info = (title: string, message?: string, options?: ToastOptions) =>
     addToast('info', title, message, options);
 
   const loading = (title: string, message?: string) =>
@@ -235,6 +234,17 @@ export const useToast = () => {
     info,
     loading
   };
+};
+
+export const ToastProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
+  const value = useToastState();
+  return <ToastContext.Provider value={value}>{children}</ToastContext.Provider>;
+};
+
+export const useToast = (): ToastContextValue => {
+  const context = useContext(ToastContext);
+  if (!context) throw new Error('useToast must be used within ToastProvider');
+  return context;
 };
 
 // Contenedor de toasts

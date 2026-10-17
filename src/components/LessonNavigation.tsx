@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import '../styles/mobileEducation.css';
 
 interface LessonNavigationProps {
   areaId: string;
@@ -35,14 +36,25 @@ const LessonNavigation: React.FC<LessonNavigationProps> = ({
   };
 
   return (
-    <div className="bg-white border-t border-gray-200 p-4">
+    <nav
+      className="education-lesson-nav bg-white border-t border-gray-200 p-4"
+      aria-label="Navegación de la lección"
+      data-lesson-id={currentLessonId}
+    >
       {/* Progress Bar */}
-      <div className="mb-4">
+      <div className="education-lesson-nav__progress mb-4">
         <div className="flex justify-between text-sm text-gray-600 mb-2">
           <span>Progreso de la lección</span>
-          <span>{progress}%</span>
+          <span aria-live="polite">{progress}%</span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
+        <div
+          className="education-lesson-nav__progress-bar w-full bg-gray-200 rounded-full h-2"
+          role="progressbar"
+          aria-label="Progreso de la lección"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress}
+        >
           <div 
             className="bg-blue-600 h-2 rounded-full transition-all duration-300"
             style={{ width: `${progress}%` }}
@@ -51,10 +63,12 @@ const LessonNavigation: React.FC<LessonNavigationProps> = ({
       </div>
 
       {/* Navigation Buttons */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
+      <div className="education-lesson-nav__row flex items-center justify-between">
+        <div className="education-lesson-nav__breadcrumbs flex items-center space-x-2">
           {/* Breadcrumb Navigation */}
           <button
+            type="button"
+            aria-label="Volver al área"
             onClick={handleBackToArea}
             className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
           >
@@ -62,6 +76,8 @@ const LessonNavigation: React.FC<LessonNavigationProps> = ({
           </button>
           <span className="text-gray-400">/</span>
           <button
+            type="button"
+            aria-label="Volver al módulo"
             onClick={handleBackToModule}
             className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
           >
@@ -69,9 +85,11 @@ const LessonNavigation: React.FC<LessonNavigationProps> = ({
           </button>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="education-lesson-nav__actions flex items-center space-x-3">
           {/* Previous Button */}
           <button
+            type="button"
+            aria-label="Lección anterior"
             onClick={onPrevious}
             disabled={!hasPrevious}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
@@ -86,6 +104,8 @@ const LessonNavigation: React.FC<LessonNavigationProps> = ({
           {/* Complete/Next Button */}
           {hasNext ? (
             <button
+              type="button"
+              aria-label="Siguiente lección"
               onClick={onNext}
               className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
             >
@@ -93,6 +113,8 @@ const LessonNavigation: React.FC<LessonNavigationProps> = ({
             </button>
           ) : (
             <button
+              type="button"
+              aria-label="Completar lección"
               onClick={onComplete}
               className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
             >
@@ -101,7 +123,7 @@ const LessonNavigation: React.FC<LessonNavigationProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </nav>
   );
 };
 

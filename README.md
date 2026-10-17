@@ -1,4 +1,4 @@
-# Escala Digital - Super App de Aprendizaje Adaptativo
+# Escaladigital | Super App de Aprendizaje Adaptativo
 
 Una Súper App de aprendizaje adaptativo y diagnóstico empresarial diseñada para transformar negocios tradicionales en entidades digitales altamente rentables.
 
@@ -50,6 +50,16 @@ Una Súper App de aprendizaje adaptativo y diagnóstico empresarial diseñada pa
 4. Ve a Settings > API para obtener tus credenciales
 5. Copia las credenciales en `src/supabase.ts`
 
+Para habilitar la persistencia del diagnóstico visitante y su primer taller, aplica `supabase/migrations/20261007000000_guest_journey_persistence.sql` y `supabase/migrations/20261008010000_guest_workshop_response.sql` después del esquema base en el SQL Editor de Supabase. La ruta sigue guardándose localmente si la sincronización remota no está disponible.
+
+Para habilitar las métricas administrativas y el acceso seguro al panel, aplica también las migraciones `20260908060000_product_hardening.sql`, `20260908070000_platform_admin_insights.sql` y `20261008000000_platform_admin_feedback.sql`. Autoriza administradores manualmente desde el SQL Editor con el UUID del usuario ya registrado en Supabase Auth; no uses metadata editable del perfil como permiso:
+
+```sql
+INSERT INTO public.platform_admins (user_id)
+VALUES ('UUID_DEL_USUARIO_ADMIN')
+ON CONFLICT (user_id) DO NOTHING;
+```
+
 Notas:
 - El esquema incluye soporte para **empresa** y **múltiples usuarios por empresa** (roles y áreas).
 - El esquema incluye tablas de **analítica** para entender: cuántos usuarios, de dónde vienen, qué ven, cuánto duran, y qué herramientas clican.
@@ -57,7 +67,7 @@ Notas:
 ### 2. Configurar Gemini AI
 
 1. Obtén tu API key en [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Reemplaza la API key en `src/services/gemini.ts`
+2. Configura `GEMINI_API_KEY` únicamente en el servidor del proxy Gemini. Nunca la incluyas en el frontend ni en variables `REACT_APP_*`.
 
 ### 3. Instalar Dependencias
 
@@ -307,8 +317,10 @@ Crea `.env.local` para configuración sensible:
 ```
 REACT_APP_SUPABASE_URL=tu_supabase_url
 REACT_APP_SUPABASE_ANON_KEY=tu_supabase_anon_key
-REACT_APP_GEMINI_API_KEY=tu_gemini_key
+REACT_APP_GEMINI_PROXY_URL=/api/gemini
 ```
+
+La clave `GEMINI_API_KEY` debe configurarse como secreto del servidor, no en `.env.local` del frontend.
 
 ### Reglas RLS (Row Level Security)
 Las políticas de seguridad ya están configuradas en el SQL:

@@ -1,10 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useAuth } from '../components/SupabaseAuthProvider';
 import { supabase } from '../supabase';
-import { BUSINESS_AREAS } from '../types';
+import { BUSINESS_AREAS, MODULE_CATALOG } from '../types';
+import { LESSONS_PER_MODULE, QUIZZES_PER_MODULE } from '../data/courseConfig';
 import AreaCard from '../components/AreaCard';
 import ProfileMenu from '../components/ProfileMenu';
+import { useLearningStore } from '../stores/useLearningStore';
+import { BusinessRadarChart } from '../components/interactive/BusinessRadarChart';
+import { DailyRetentionWidget } from '../components/interactive/DailyRetentionWidget';
+import { DailyChallengeModal } from '../components/interactive/DailyChallengeModal';
+import { LanguageToggle } from '../components/ui/LanguageToggle';
+import { ExpandableCard } from '../components/mobile/ExpandableCard';
+import { MobileBottomNavigation } from '../components/mobile/MobileBottomNavigation';
+import { DiagnosticResult } from '../services/gemini';
+import { readUserDiagnostic, writeUserDiagnostic } from '../utils/userScopedStorage';
 
 interface ProgressData {
   [areaId: string]: {
@@ -15,166 +26,540 @@ interface ProgressData {
   };
 }
 
+const createEmptyProgress = (): ProgressData => Object.fromEntries(
+  BUSINESS_AREAS.map((area) => {
+    const moduleCount = MODULE_CATALOG[area.id]?.length || 0;
+    return [area.id, {
+      completedLessons: 0,
+      totalLessons: moduleCount * LESSONS_PER_MODULE,
+      completedQuizzes: 0,
+      totalQuizzes: moduleCount * QUIZZES_PER_MODULE
+    }];
+  })
+);
+
 const DashboardPage: React.FC = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { xp, streakDays, businessLevel, recordActivity, learningTimeline, weeklyCommitments, badges, businessName, dailyChallengeCompleted } = useLearningStore();
+
   const [progress, setProgress] = useState<ProgressData>({});
   const [loading, setLoading] = useState(true);
+  const [diagnostic, setDiagnostic] = useState<any>(null);
+  const [showDailyChallenge, setShowDailyChallenge] = useState(false);
 
   useEffect(() => {
-    // Cargar progreso REAL desde Supabase
-    const loadRealProgress = async () => {
-      if (!user) return;
+    recordActivity();
 
+    setDiagnostic(readUserDiagnostic<DiagnosticResult>(user?.id) || readUserDiagnostic<DiagnosticResult>(null));
+
+    // Show daily challenge modal if not completed
+    if (!dailyChallengeCompleted) {
+      const timer = setTimeout(() => {
+        setShowDailyChallenge(true);
+      }, 1500); // Show after 1.5s for smooth UX
+      return () => clearTimeout(timer);
+    }
+
+    if (!user?.email || user.id.startsWith('guest_')) {
+      setProgress(createEmptyProgress());
+      setLoading(false);
+      return;
+    }
+
+    const loadRealProgress = async () => {
       try {
         setLoading(true);
-        
-        // Obtener todo el progreso del usuario
+        const { data: diagnosticData, error: diagnosticError } = await supabase
+          .from('user_diagnostics')
+          .select('business_type, main_challenge, business_description, executive_summary, generation_source, scalability_roadmap, recommended_modules')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (diagnosticData && !diagnosticError) {
+          const remoteDiagnostic: DiagnosticResult = {
+            businessType: diagnosticData.business_type,
+            mainChallenge: diagnosticData.main_challenge,
+            executiveSummary: diagnosticData.executive_summary || `Tu negocio es ${diagnosticData.business_type}. El reto principal identificado es ${diagnosticData.main_challenge}.`,
+            generationSource: diagnosticData.generation_source === 'fallback' ? 'fallback' : 'ai',
+            scalabilityRoadmap: Array.isArray(diagnosticData.scalability_roadmap) ? diagnosticData.scalability_roadmap : [],
+            recommendedModules: Array.isArray(diagnosticData.recommended_modules) ? diagnosticData.recommended_modules : []
+          };
+          setDiagnostic(remoteDiagnostic);
+          writeUserDiagnostic(user.id, remoteDiagnostic);
+        } else if (diagnosticError) {
+          console.warn('No se pudo cargar el diagnóstico remoto; se conserva el respaldo local', diagnosticError);
+        }
+
         const { data: progressData, error } = await supabase
           .from('user_progress')
-          .select('module_id, completion_percentage, lessons_completed, status');
+          .select('module_id, completion_percentage, lessons_completed, status')
+          .eq('user_id', user.id);
+
+        const zeroProgress = createEmptyProgress();
 
         if (error) {
-          console.error('Error loading progress:', error);
-          // Si hay error, mostrar progreso en cero
-          const zeroProgress: ProgressData = {};
-          BUSINESS_AREAS.forEach(area => {
-            zeroProgress[area.id] = {
-              completedLessons: 0,
-              totalLessons: 8,
-              completedQuizzes: 0,
-              totalQuizzes: 4,
-            };
-          });
           setProgress(zeroProgress);
           return;
         }
 
-        // Mapear progreso real por área
-        const realProgress: ProgressData = {};
-        
-        // Inicializar todas las áreas con cero
+        const realProgress = { ...zeroProgress };
+        const completedByArea: Record<string, { lessons: number; quizzes: number }> = {};
+
+        // Inicializar áreas
         BUSINESS_AREAS.forEach(area => {
-          realProgress[area.id] = {
-            completedLessons: 0,
-            totalLessons: 8,
-            completedQuizzes: 0,
-            totalQuizzes: 4,
-          };
+          completedByArea[area.id] = { lessons: 0, quizzes: 0 };
         });
 
-        // Agregar progreso real si existe
-        progressData?.forEach(progress => {
-          const areaId = progress.module_id.split('-')[0]; // Extraer areaId de moduleId
+        // 1. Cargar datos de Supabase si existen
+        progressData?.forEach((p: any) => {
+          const areaId = String(p.module_id || '').split('-')[0];
           if (realProgress[areaId]) {
-            realProgress[areaId].completedLessons = progress.lessons_completed?.length || 0;
-            realProgress[areaId].completedQuizzes = progress.completion_percentage >= 60 ? 1 : 0;
+            completedByArea[areaId].lessons += Array.isArray(p.lessons_completed) ? p.lessons_completed.length : 0;
+            completedByArea[areaId].quizzes += (Number(p.completion_percentage) || 0) >= 60 ? 1 : 0;
+          }
+        });
+
+        // 2. Combinar con respaldo local (resiliente)
+        BUSINESS_AREAS.forEach(area => {
+          const moduleList = MODULE_CATALOG[area.id] || [];
+          moduleList.forEach(mod => {
+            try {
+              const stored = window.localStorage.getItem(`escala:progress:${user.id}:${mod.id}`);
+              if (stored) {
+                const parsed = JSON.parse(stored);
+                const localCount = Array.isArray(parsed.lessons_completed) ? parsed.lessons_completed.length : 0;
+                if (localCount > completedByArea[area.id].lessons) {
+                  completedByArea[area.id].lessons = localCount;
+                }
+                if (Number(parsed.completion_percentage) >= 60 && completedByArea[area.id].quizzes === 0) {
+                  completedByArea[area.id].quizzes = 1;
+                }
+              }
+            } catch {
+              // ignore
+            }
+          });
+        });
+
+        Object.entries(completedByArea).forEach(([areaId, values]) => {
+          if (realProgress[areaId]) {
+            realProgress[areaId].completedLessons = values.lessons;
+            realProgress[areaId].completedQuizzes = values.quizzes;
           }
         });
 
         setProgress(realProgress);
       } catch (error) {
-        console.error('Error loading progress:', error);
-        // Fallback a cero
-        const zeroProgress: ProgressData = {};
-        BUSINESS_AREAS.forEach(area => {
-          zeroProgress[area.id] = {
-            completedLessons: 0,
-            totalLessons: 8,
-            completedQuizzes: 0,
-            totalQuizzes: 4,
-          };
-        });
-        setProgress(zeroProgress);
+        console.warn('Could not load user progress', error);
+        setProgress(createEmptyProgress());
       } finally {
         setLoading(false);
       }
     };
 
     loadRealProgress();
-  }, [user]);
+  }, [user, recordActivity, dailyChallengeCompleted]);
 
   const handleAreaClick = (areaId: string) => {
-    navigate(`/area/${areaId}`);
+    const normalizedAreaId = areaId.includes('-') ? areaId.split('-')[0] : areaId;
+    navigate(`/area/${normalizedAreaId}`);
   };
+
+  // Convert progress into percentage scores for the radar chart
+  const radarScores: Record<string, number> = {};
+  BUSINESS_AREAS.forEach(area => {
+    const areaProg = progress[area.id];
+    if (areaProg) {
+      const pct = Math.round(
+        ((areaProg.completedLessons + areaProg.completedQuizzes) /
+         (areaProg.totalLessons + areaProg.totalQuizzes)) * 100
+      );
+      // Give at least a base score or calculated percentage
+      radarScores[area.id] = Math.max(0, Math.min(100, pct));
+    } else {
+      radarScores[area.id] = 30;
+    }
+  });
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando tu progreso...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-electric-blue mx-auto mb-4"></div>
+          <p className="text-gray-400">Sincronizando Torre de Control...</p>
         </div>
       </div>
     );
   }
 
+  const completedLessonsTotal = Object.values(progress).reduce((acc, a) => acc + a.completedLessons, 0);
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">Escala Digital</h1>
+    <div className="min-h-screen overflow-x-hidden bg-dark-bg text-white pb-16">
+      {/* Daily Challenge Modal */}
+      <DailyChallengeModal
+        isOpen={showDailyChallenge}
+        onClose={() => setShowDailyChallenge(false)}
+      />
+      {/* Top Navigation Bar */}
+      <header className="bg-dark-secondary/80 backdrop-blur-md border-b border-gray-800 sticky top-0 z-40 w-full">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16 gap-2">
+            <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-shrink">
+              <span className="text-xl sm:text-2xl flex-shrink-0">⚡</span>
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-electric-blue to-violet truncate">
+                  Escala Digital
+                </h1>
+                <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider hidden sm:block truncate">
+                  Torre de Control Empresarial
+                </div>
+              </div>
             </div>
-            <ProfileMenu user={user} onSignOut={signOut} />
+
+            {/* Gamification Bar */}
+            <div className="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
+              {/* Streak */}
+              <div className="flex items-center space-x-1 bg-dark-tertiary px-2 sm:px-3 py-1 rounded-full border border-gray-700 shadow-inner">
+                <span className="text-sm sm:text-base animate-pulse">🔥</span>
+                <span className="text-xs font-bold text-amber-400">{streakDays}</span>
+                <span className="text-[11px] text-gray-400 hidden md:inline">días</span>
+              </div>
+
+              {/* XP & Level */}
+              <div className="flex items-center space-x-1.5 bg-gradient-to-r from-violet/20 to-electric-blue/20 px-2.5 sm:px-3.5 py-1 rounded-full border border-violet/30">
+                <span className="text-sm">{businessLevel.badge}</span>
+                <div className="text-left">
+                  <div className="text-xs font-black text-white">{xp} XP</div>
+                  <div className="text-[10px] text-gray-300 hidden md:block">{businessLevel.title}</div>
+                </div>
+              </div>
+
+              <div className="hidden xs:block">
+                <LanguageToggle />
+              </div>
+
+              <ProfileMenu user={user} onSignOut={signOut} />
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Section */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            ¡Bienvenido de nuevo, {user?.user_metadata?.name || user?.email || 'Usuario'}!
-          </h2>
-          <p className="text-gray-600">
-            Continúa tu aprendizaje y escala tu negocio al siguiente nivel.
-          </p>
-        </div>
+      {/* Main Container */}
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8 w-full max-w-full overflow-hidden">
+        {/* Welcome Banner */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-black text-white">
+              {businessName
+                ? `¡Torre de Control lista, ${user?.user_metadata?.name || user?.email?.split('@')[0] || 'Líder'}!`
+                : `¡Torre de Control lista, ${user?.user_metadata?.name || user?.email?.split('@')[0] || 'Líder'}!`}
+            </h2>
+            {businessName && (
+              <p className="text-electric-blue text-sm font-bold mt-0.5">
+                🏗️ Construyendo: <span className="text-white">{businessName}</span>
+              </p>
+            )}
+            <p className="text-gray-400 text-sm mt-1">
+              Nivel actual: <strong className="text-violet">{businessLevel.title}</strong> • Siguiente hito a los {businessLevel.nextLevelXp} XP.
+            </p>
+          </div>
 
-        {/* Progress Overview */}
-        <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Tu progreso general</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-blue-600">
-                {Object.values(progress).reduce((acc, area) => acc + area.completedLessons, 0)}
-              </div>
-              <div className="text-gray-600">Lecciones completadas</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-green-600">
-                {Object.values(progress).reduce((acc, area) => acc + area.completedQuizzes, 0)}
-              </div>
-              <div className="text-gray-600">Quizzes aprobados</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-purple-600">
-                {BUSINESS_AREAS.length}
-              </div>
-              <div className="text-gray-600">Áreas de negocio</div>
-            </div>
+          {/* Quick Access to Simulators */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => navigate('/academia-procesos')}
+              className="text-xs font-bold bg-electric-blue/15 hover:bg-electric-blue/25 text-electric-blue border border-electric-blue/30 px-3.5 py-2 rounded-xl transition-all flex items-center space-x-1.5"
+            >
+              <span>🧭</span>
+              <span>Academia de Procesos</span>
+            </button>
+            <button
+              onClick={() => handleAreaClick('finance')}
+              className="text-xs font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 px-3.5 py-2 rounded-xl transition-all flex items-center space-x-1.5"
+            >
+              <span>🧮</span>
+              <span>Simulador de Precios</span>
+            </button>
+            <button
+              onClick={() => handleAreaClick('sales')}
+              className="text-xs font-bold bg-violet/15 hover:bg-violet/25 text-violet border border-violet/30 px-3.5 py-2 rounded-xl transition-all flex items-center space-x-1.5"
+            >
+              <span>🎯</span>
+              <span>Simulador de Ventas</span>
+            </button>
           </div>
         </div>
 
-        {/* Business Areas Grid */}
+        {/* Daily Retention Challenge (Spaced Repetition Widget) */}
+        <ExpandableCard 
+          title="Desafío del Día" 
+          icon="⚡"
+          defaultExpanded={true}
+          className="mb-4"
+        >
+          <DailyRetentionWidget onOpenModal={() => setShowDailyChallenge(true)} />
+        </ExpandableCard>
+
+        <ExpandableCard 
+          title="Siguiente Paso" 
+          icon="🎯"
+          defaultExpanded={true}
+          className="mb-4"
+        >
+          <section className="rounded-2xl border border-violet/30 bg-violet/10 p-5" aria-labelledby="next-step-title">
+          <p className="text-xs font-bold uppercase tracking-wider text-violet">Tu siguiente avance</p>
+          <h3 id="next-step-title" className="mt-1 text-lg font-bold">
+            {!diagnostic ? 'Descubre tu punto de partida' : completedLessonsTotal === 0 ? 'Convierte tu diagnóstico en una acción' : 'Continúa con tu siguiente lección'}
+              {!diagnostic ? 'Empieza con un diagnóstico, cuando quieras' : completedLessonsTotal === 0 ? 'Convierte tu diagnóstico en una acción' : 'Continúa con tu siguiente lección'}
+          </h3>
+          <p className="mt-1 text-sm text-gray-300">
+              {!diagnostic
+                ? 'Completa el diagnóstico para recibir una ruta adaptada a tu empresa.'
+                : completedLessonsTotal === 0
+                  ? 'Tu ruta ya está creada. Empieza una lección breve y aplica una recomendación hoy.'
+                  : `Llevas ${completedLessonsTotal} lección${completedLessonsTotal === 1 ? '' : 'es'} completada${completedLessonsTotal === 1 ? '' : 's'}. Elige un pilar para seguir avanzando.`}
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate(!diagnostic ? '/?start=diagnostic' : `/area/${diagnostic.recommendedModules?.[0] || 'finance'}`)}
+            className="mt-4 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold hover:bg-violet-500"
+          >
+            {!diagnostic ? 'Completar diagnóstico' : 'Continuar aprendizaje'}
+          </button>
+        </section>
+        </ExpandableCard>
+
+        {/* Diagnostic 360 & Radar Row */}
+        <ExpandableCard 
+          title="Diagnóstico y Métricas" 
+          icon="📊"
+          defaultExpanded={false}
+          className="mb-4"
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Radar Chart Component (5 cols) */}
+          <div className="lg:col-span-5">
+            <BusinessRadarChart
+              progressScores={radarScores}
+              onAreaSelect={handleAreaClick}
+            />
+          </div>
+
+          {/* AI Executive Roadmap / Insights (7 cols) */}
+          <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
+            {/* AI Summary Box */}
+            {diagnostic?.executiveSummary ? (
+              <div className="bg-gradient-to-r from-dark-secondary to-dark-tertiary rounded-2xl p-6 border border-electric-blue/30 shadow-[0_0_20px_rgba(0,195,255,0.1)] relative overflow-hidden">
+                <div className="flex items-center space-x-2 mb-2">
+                  <span className="bg-electric-blue/20 text-electric-blue text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-electric-blue/30">
+                    Diagnóstico IA Personalizado
+                  </span>
+                  <span className="text-xs text-gray-400 font-medium">{diagnostic.businessType}</span>
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">Enfoque Táctico Recomendado</h3>
+                <p className="text-gray-300 text-sm leading-relaxed">
+                  "{diagnostic.executiveSummary}"
+                </p>
+              </div>
+            ) : (
+              <div className="bg-dark-secondary rounded-2xl p-6 border border-gray-800">
+                <div className="flex items-center space-x-2 mb-2">
+                  <span className="bg-violet/20 text-violet text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-violet/30">
+                    Ruta de Escalabilidad
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">Estrategia de Crecimiento Ordenado</h3>
+                <p className="text-gray-300 text-sm leading-relaxed">
+                  Completa los módulos clave en orden para fortalecer las finanzas, sistematizar las ventas y crear procesos que permitan delegar sin perder calidad.
+                </p>
+              </div>
+            )}
+
+            {/* Quick Metrics Bar */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <div className="bg-dark-secondary p-2.5 sm:p-4 rounded-xl border border-gray-800 text-center">
+                <div className="text-lg sm:text-2xl font-black text-electric-blue">{completedLessonsTotal}</div>
+                <div className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5 leading-tight">Lecciones</div>
+              </div>
+              <div className="bg-dark-secondary p-2.5 sm:p-4 rounded-xl border border-gray-800 text-center">
+                <div className="text-lg sm:text-2xl font-black text-emerald-400">{streakDays} 🔥</div>
+                <div className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5 leading-tight">Días Racha</div>
+              </div>
+              <div className="bg-dark-secondary p-2.5 sm:p-4 rounded-xl border border-gray-800 text-center">
+                <div className="text-lg sm:text-2xl font-black text-violet">{BUSINESS_AREAS.length}</div>
+                <div className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5 leading-tight">Pilares</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </ExpandableCard>
+
+        {/* 8 Business Pillars Grid */}
+        <ExpandableCard 
+          title="Pilares de Escalamiento" 
+          icon="🏗️"
+          defaultExpanded={true}
+          className="mb-4"
+        >
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Áreas de negocio</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 sm:mb-5 gap-1">
+            <h3 className="text-lg sm:text-xl font-bold text-white flex items-center">
+              <span className="w-2.5 h-2.5 bg-electric-blue rounded-full mr-2.5 shadow-[0_0_10px_#00C3FF]"></span>
+              Pilares de Escalamiento de tu Empresa
+            </h3>
+            <span className="text-xs text-gray-400">Selecciona un área para entrar a sus lecciones y simuladores</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             {BUSINESS_AREAS.map((area) => (
-              <AreaCard
+              <motion.div
                 key={area.id}
-                area={area}
-                progress={progress[area.id]}
-                onClick={() => handleAreaClick(area.id)}
-              />
+                whileHover={{ y: -4, transition: { duration: 0.2 } }}
+              >
+                <AreaCard
+                  area={area}
+                  progress={progress[area.id]}
+                  onClick={() => handleAreaClick(area.id)}
+                />
+              </motion.div>
             ))}
           </div>
         </div>
+        </ExpandableCard>
+
+        {/* ── LEARNING TIMELINE ── */}
+        {learningTimeline.length > 0 && (
+          <ExpandableCard 
+            title="Mi Evolución" 
+            icon="📅"
+            defaultExpanded={false}
+            className="mb-4"
+          >
+          <section aria-labelledby="timeline-title">
+            <h3 id="timeline-title" className="text-lg font-bold text-white mb-4 flex items-center">
+              <span className="w-2.5 h-2.5 bg-violet rounded-full mr-2.5 shadow-[0_0_10px_#7C3AED]"></span>
+              Mi Evolución — Timeline de Aprendizaje
+            </h3>
+            <div className="relative">
+              {/* Horizontal scroll timeline */}
+              <div className="flex space-x-4 overflow-x-auto pb-4 hide-scrollbar">
+                {learningTimeline.slice(0, 12).map((event, idx) => (
+                  <div
+                    key={event.id}
+                    className="flex-shrink-0 flex flex-col items-center"
+                    style={{ minWidth: 100 }}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-dark-secondary border-2 border-violet/40 flex items-center justify-center text-xl shadow-[0_0_12px_rgba(124,58,237,0.2)]">
+                      {event.emoji}
+                    </div>
+                    {idx < learningTimeline.slice(0, 12).length - 1 && (
+                      <div className="absolute hidden" /> /* connector handled by flex */
+                    )}
+                    <div className="mt-2 text-center">
+                      <div className="text-[10px] font-bold text-gray-300 leading-tight max-w-[88px] text-center">
+                        {event.label}
+                      </div>
+                      <div className="text-[9px] text-gray-600 mt-0.5">
+                        {new Date(event.date).toLocaleDateString('es', { day: '2-digit', month: 'short' })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+          </ExpandableCard>
+        )}
+
+        {/* ── WEEKLY COMMITMENT ── */}
+        {(() => {
+          const commitmentEntries = Object.entries(weeklyCommitments);
+          const latest = commitmentEntries[commitmentEntries.length - 1];
+          if (!latest) return null;
+          return (
+            <ExpandableCard 
+              title="Compromiso Semanal" 
+              icon="📌"
+              defaultExpanded={false}
+              className="mb-4"
+            >
+            <section className="rounded-2xl border border-violet/30 bg-violet/10 p-5">
+              <div className="flex items-start space-x-3">
+                <span className="text-2xl">📌</span>
+                <div className="flex-1">
+                  <div className="text-xs font-black text-violet uppercase tracking-wider mb-1">
+                    Tu compromiso de esta semana
+                  </div>
+                  <p className="text-sm text-gray-200 italic leading-relaxed">
+                    "{latest[1]}"
+                  </p>
+                  <p className="text-[10px] text-gray-500 mt-2">
+                    Registrado en: lección {latest[0]}
+                  </p>
+                </div>
+              </div>
+            </section>
+            </ExpandableCard>
+          );
+        })()}
+
+        {/* ── BADGES SHOWCASE ── */}
+        {(() => {
+          const unlocked = badges.filter(b => b.unlockedAt);
+          return (
+            <ExpandableCard 
+              title={`Insignias (${unlocked.length}/${badges.length})`} 
+              icon="🏆"
+              defaultExpanded={false}
+              className="mb-4"
+            >
+            <section aria-labelledby="badges-title">
+              <h3 id="badges-title" className="text-lg font-bold text-white mb-4 flex items-center">
+                <span className="w-2.5 h-2.5 bg-amber-400 rounded-full mr-2.5 shadow-[0_0_10px_#fbbf24]"></span>
+                Insignias y Logros
+                {unlocked.length > 0 && (
+                  <span className="ml-2 text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/30 px-2 py-0.5 rounded-full">
+                    {unlocked.length} / {badges.length}
+                  </span>
+                )}
+              </h3>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                {badges.map((badge) => (
+                  <div
+                    key={badge.id}
+                    className={`flex flex-col items-center p-3 rounded-2xl border text-center transition-all ${
+                      badge.unlockedAt
+                        ? 'border-amber-400/40 bg-amber-400/10 shadow-[0_0_16px_rgba(251,191,36,0.15)]'
+                        : 'border-gray-800 bg-dark-secondary opacity-40 grayscale'
+                    }`}
+                  >
+                    <span className="text-3xl mb-1.5">{badge.emoji}</span>
+                    <span className="text-[10px] font-bold text-gray-300 leading-tight">{badge.name}</span>
+                    {badge.unlockedAt && (
+                      <span className="text-[9px] text-amber-400 mt-1">
+                        {new Date(badge.unlockedAt).toLocaleDateString('es', { day: '2-digit', month: 'short' })}
+                      </span>
+                    )}
+                    {!badge.unlockedAt && (
+                      <span className="text-[9px] text-gray-600 mt-1">🔒 Bloqueado</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+            </ExpandableCard>
+          );
+        })()}
       </main>
+
+      {/* Mobile Bottom Navigation */}
+      <div className="lg:hidden">
+        <MobileBottomNavigation />
+      </div>
     </div>
   );
 };

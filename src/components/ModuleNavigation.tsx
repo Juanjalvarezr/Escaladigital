@@ -15,7 +15,8 @@ export const ModuleNavigation: React.FC<ModuleNavigationProps> = ({
   const location = useLocation();
 
   const handleModuleClick = (moduleId: string) => {
-    navigate(`/module/${moduleId}`);
+    const areaId = moduleId.includes('-') ? moduleId.split('-')[0] : moduleId;
+    navigate(`/area/${areaId}`);
   };
 
   return (
@@ -70,7 +71,8 @@ export const ModuleSidebar: React.FC<ModuleNavigationProps> = ({
   const location = useLocation();
 
   const handleModuleClick = (moduleId: string) => {
-    navigate(`/module/${moduleId}`);
+    const areaId = moduleId.includes('-') ? moduleId.split('-')[0] : moduleId;
+    navigate(`/area/${areaId}`);
   };
 
   return (

@@ -1,6 +1,6 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { publishToKnowledgeRepository } from './knowledgeRepository';
 
-// 🔥 SISTEMA MEJORADO DE GENERACIÓN DE CONTENIDO POR IA
+// 🔥 SISTEMA MEJORADO DE GENERACIÓN DE CONTENIDO POR IA (CLIENT-SAFE)
 // =====================================================
 // CARACTERÍSTICAS PRINCIPALES:
 // ✅ Generación personalizada según tipo de negocio
@@ -10,25 +10,37 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 // ✅ Herramientas recomendadas por industria
 // ✅ Checklist de implementación práctica
 
-const API_KEY = process.env.REACT_APP_GEMINI_API_KEY || 'TU_API_KEY_REAL_AQUI'; 
-const genAI = new GoogleGenerativeAI(API_KEY);
+const GEMINI_PROXY = process.env.REACT_APP_GEMINI_PROXY_URL || '/api/gemini';
 
-// Test de conexión mejorado
-console.log('🤖 Gemini IA Status:', API_KEY && API_KEY !== 'TU_API_KEY_REAL_AQUI' ? '✅ ACTIVO' : '❌ INACTIVO');
-if (API_KEY === 'TU_API_KEY_REAL_AQUI') {
-  console.log('⚠️ Configura tu API Key en .env.local');
-  console.log('📝 Ejemplo: REACT_APP_GEMINI_API_KEY=tu_api_key_real');
+async function callGeminiProxy(payload: { prompt: string; metadata?: any }) {
+  const res = await fetch(GEMINI_PROXY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Gemini proxy error: ${res.status} ${text}`);
+  }
+
+  return res.json();
 }
 
 export interface DiagnosticResult {
   businessType: string;
   mainChallenge: string;
+  executiveSummary?: string;
+  generationSource?: 'ai' | 'fallback';
   scalabilityRoadmap: {
     phase: string;
     description: string;
     priority: 'high' | 'medium' | 'low';
+    topics?: string[];
+    moduleId?: string;
   }[];
   recommendedModules: string[];
+  organizationalAreas?: Record<string, 'defined' | 'not_defined'>;
 }
 
 export interface LessonContent {
@@ -86,7 +98,6 @@ export interface QuizQuestion {
 }
 
 export class GeminiService {
-  private model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
   private withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
     return Promise.race([
@@ -342,25 +353,40 @@ export class GeminiService {
     const meta = this.moduleCurriculum[moduleId];
     const moduleName = meta?.name || moduleId;
 
-    const docs = (meta?.documents || []).slice(0, 6);
-    const docsText =
-      docs.length === 0
-        ? 'Temas sugeridos: (pendiente de configurar)'
-        : docs
-            .map((d) => `- ${d.title}: ${d.description} (Beneficio: ${d.benefit})`)
-            .join('\n');
-
-    const purposeText = meta?.purpose ? `${meta.purpose}\n\n` : '';
+    const topics = (meta?.documents || []).slice(0, 6).map((d, i) => {
+      // Create short actionable mini-course topic titles from document titles
+      const base = `${moduleName}: ${d.title}`;
+      return `${base}`;
+    }).slice(0, 5);
 
     return {
       phase: `Módulo: ${moduleName}`,
-      description: `${purposeText}${docsText}`,
-      priority
+      description: meta?.purpose || `Empieza con una acción práctica para mejorar ${moduleName.toLowerCase()} en tu negocio.`,
+      priority,
+      topics
     };
   }
 
-  private buildFallbackDiagnostic(businessDescription: string, mainChallenge: string): DiagnosticResult {
-    const text = `${businessDescription} ${mainChallenge}`.toLowerCase();
+  private buildTopicsForModule(moduleId: string, businessDescription: string): string[] {
+    // Use available curriculum to synthesize 3 unique mini-course topics
+    const meta = this.moduleCurriculum[moduleId];
+    const moduleName = meta?.name || moduleId;
+    const docs = (meta?.documents || []).slice(0, 6);
+
+    const baseTopics = docs.length > 0 ? docs.map(d => `${moduleName}: ${d.title}`) : [
+      `${moduleName}: Fundamentos esenciales`,
+      `${moduleName}: Aplicación práctica paso a paso`,
+      `${moduleName}: Casos de éxito y errores comunes`
+    ];
+
+    // Make sure topics are unique and influenced by businessDescription for personalization
+    const personalization = (businessDescription || '').split(' ').slice(0, 4).join(' ');
+    const topics = baseTopics.slice(0, 5).map((t, i) => `${t}${personalization ? ` — ${personalization}` : ''}`);
+    return topics.slice(0, 5);
+  }
+
+  private buildFallbackDiagnostic(businessDescription: string, mainChallenge: string, businessType: string, businessName: string): DiagnosticResult {
+    const text = `${businessDescription} ${mainChallenge} ${businessType}`.toLowerCase();
 
     const add = (set: Set<string>, id: string) => set.add(id);
     const modules = new Set<string>();
@@ -433,53 +459,131 @@ export class GeminiService {
     const remaining = recommendedModules.filter((m) => !orderedModules.includes(m));
     const finalModules = [...orderedModules, ...remaining];
 
-    const scalabilityRoadmap: DiagnosticResult['scalabilityRoadmap'] = finalModules.map((moduleId) =>
+    // Ensure we provide a richer roadmap: aim for at least 6 modules in the roadmap
+    const MIN_MODULES = 6;
+    const allPossible = Array.from(new Set([...finalModules, ...preferredOrder]));
+    const supplemented: string[] = [...finalModules];
+    for (const candidate of allPossible) {
+      if (supplemented.length >= MIN_MODULES) break;
+      if (!supplemented.includes(candidate)) supplemented.push(candidate);
+    }
+
+    const scalabilityRoadmap: DiagnosticResult['scalabilityRoadmap'] = supplemented.map((moduleId) =>
       this.buildModuleRoadmapItem(moduleId, modulePriority(moduleId))
     );
 
     return {
-      businessType: 'General',
-      mainChallenge: mainChallenge,
+      businessType: businessType || 'Negocio en etapa inicial',
+      mainChallenge: mainChallenge || 'Crecimiento',
+      executiveSummary: `Para ${businessName || 'tu negocio'}${businessType ? `, enfocado en ${businessType}` : ''}, preparé una ruta inicial centrada en ${mainChallenge || 'ordenar el crecimiento'}. La IA no respondió esta vez, así que puedes empezar con este plan local y conservarlo.`,
+      generationSource: 'fallback',
       scalabilityRoadmap,
       recommendedModules
     };
   }
 
-  async analyzeBusiness(businessDescription: string, mainChallenge: string): Promise<DiagnosticResult> {
+  async generateDynamicQuestions(businessData: { actividad: string; description: string; goals: string }): Promise<string[]> {
     const prompt = `
-      Como experto en transformación digital, analiza el siguiente negocio y genera un diagnóstico completo:
+      Eres un mentor de negocios amigable y empático. El usuario es un emprendedor principiante que te describe su empresa de forma muy sencilla:
+      Actividad: ${businessData.actividad}
+      Descripción: ${businessData.description || 'No provista'}
+      Metas: ${businessData.goals || 'No provistas'}
       
-      Descripción del negocio: ${businessDescription}
-      Principal desafío: ${mainChallenge}
+      Genera exactamente 2 preguntas muy sencillas, conversacionales y sin usar tecnicismos (no hables de márgenes, KPIs o embudos todavía). 
+      El objetivo es que el usuario se sienta comprendido y reflexione sobre qué le está costando más trabajo en su día a día (ej: "qué es lo que más te quita tiempo", "cómo consigues a tus clientes hoy").
+      Las preguntas deben ser directas, amigables y específicas a su tipo de negocio.
       
-      Genera una respuesta en formato JSON con las siguientes claves:
-      - businessType: tipo de industria (ej: retail, servicios, tecnología, etc)
-      - mainChallenge: categorización del desafío principal
-      - scalabilityRoadmap: array de fases con phase, description, priority
-      - recommendedModules: array de módulos recomendados de las 8 áreas (Gerencia, Ventas, Marketing, Operaciones, Finanzas, Tecnología, Talento, Cliente)
-      
-      Sé específico y práctico en tus recomendaciones.
+      Devuelve un JSON estricto con un array de strings:
+      ["Pregunta 1", "Pregunta 2"]
     `;
 
     try {
-      const result = await this.withTimeout(
-        this.model.generateContent(prompt),
-        20_000,
-        'Tiempo de espera agotado al consultar la IA (20s).'
+      const resp = await this.withTimeout(callGeminiProxy({ prompt }), 15000, 'Timeout preguntas');
+      const { parsed, text } = resp as any;
+      if (Array.isArray(parsed) && parsed.length >= 2) return parsed.slice(0, 2);
+      const match = (text || '').match(/\[[\s\S]*\]/);
+      if (match) return JSON.parse(match[0]).slice(0, 2);
+    } catch (e) {
+      console.warn('Error fetching dynamic questions', e);
+    }
+    return [
+      '¿Qué es lo que más te está costando trabajo en tu día a día?',
+      'De todo lo que haces en tu negocio, ¿qué es lo que más te gustaría aprender a mejorar?'
+    ];
+  }
+
+  async analyzeBusiness(fullProfile: any): Promise<DiagnosticResult> {
+    const prompt = `
+      Eres un mentor de negocios ultra-empático. Analiza a este emprendedor que está empezando y necesita una guía sencilla, paso a paso:
+      
+      Perfil:
+      - Nombre: ${fullProfile.nombre || 'No especificado'}
+      - Empresa: ${fullProfile.companyName || 'No especificado'}
+      - Actividad: ${fullProfile.actividad || 'No especificado'}
+      - Etapa del negocio: ${fullProfile.businessStage || 'No especificada'}
+      - Industria: ${fullProfile.industry || 'No especificada'}
+      - Nicho: ${fullProfile.niche || 'No especificado'}
+      - Oferta: ${fullProfile.offer || 'No especificada'}
+      - Cliente ideal: ${fullProfile.idealClient || 'No especificado'}
+      - Descripción: ${fullProfile.description || 'No especificado'}
+      - Metas: ${fullProfile.goals || 'No especificado'}
+      - Tiempo semanal disponible: ${fullProfile.timeAvailable || 'No especificado'}
+      - Equipo: ${fullProfile.employees || 'No especificado'}
+      - Áreas que quiere aprender: ${JSON.stringify(fullProfile.learningArea || [])}
+      - Respuestas a tus preguntas previas: ${JSON.stringify(fullProfile.dynamicAnswers || {})}
+      
+      IMPORTANTE: Usa un lenguaje MUY básico y motivador. Nada de palabras técnicas complicadas. Muestra empatía. 
+      Nuestra base de datos ya tiene temas básicos recomendados para los módulos, pero tú debes darle una envoltura ultra-personalizada y humana a su plan.
+      
+      Genera una respuesta en formato JSON con estas claves exactas:
+      - businessType: El tipo de negocio de forma sencilla (ej: "Restaurante Local").
+      - mainChallenge: El desafío principal que enfrenta en palabras simples.
+      - executiveSummary: Un párrafo corto, muy cálido y motivador (hablándole por su nombre a ${fullProfile.nombre || 'el usuario'}), diciendo que entiendes su situación y que esta ruta lo ayudará paso a paso.
+      - scalabilityRoadmap: array de fases con:
+         - phase: Nombre de la fase, motivador y sencillo (Ej: "Fase 1: Atrayendo a tus primeros clientes fieles").
+         - description: Qué va a aprender o lograr de manera práctica.
+         - priority: "high" | "medium" | "low"
+         - moduleId: El ID del módulo interno ("management", "sales", "operations", "marketing", "logistics", "customer", "finance", "talent", "technology").
+      - recommendedModules: array de IDs de módulos (los mismos "moduleId").
+    `;
+
+    try {
+      const resp = await this.withTimeout(
+        callGeminiProxy({ prompt }),
+        35_000,
+        'Tiempo de espera agotado al consultar la IA (35s).'
       );
-      const response = await result.response;
-      const text = response.text();
-      
-      // Extract JSON from response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]) as DiagnosticResult;
+
+      const { parsed, text } = resp as { parsed?: any; text?: string };
+
+      let parsedResult: DiagnosticResult | null = null;
+      if (parsed && typeof parsed === 'object') {
+        parsedResult = parsed as DiagnosticResult;
+      } else {
+        const jsonMatch = (text || '').match(/\{[\s\S]*\}/);
+        if (jsonMatch) parsedResult = JSON.parse(jsonMatch[0]) as DiagnosticResult;
       }
-      
+
+      if (parsedResult) {
+        parsedResult.scalabilityRoadmap = parsedResult.scalabilityRoadmap.map((it) => ({
+          ...it,
+          topics: it.topics && it.topics.length > 0 ? it.topics : this.buildTopicsForModule(it.moduleId || 'management', fullProfile.actividad || '')
+        }));
+        parsedResult.generationSource = 'ai';
+        return parsedResult;
+      }
+
       throw new Error('No se pudo procesar la respuesta de la IA');
     } catch (error) {
-      console.error('Error en Gemini API:', error);
-      return this.buildFallbackDiagnostic(businessDescription, mainChallenge);
+      console.error('Error en Gemini API (proxy):', error);
+      return this.buildFallbackDiagnostic(
+        [fullProfile.description, fullProfile.actividad, fullProfile.offer, fullProfile.idealClient, fullProfile.industry, fullProfile.niche]
+          .filter(Boolean)
+          .join(' '),
+        fullProfile.goals || '',
+        fullProfile.industry || fullProfile.niche || fullProfile.businessType || fullProfile.actividad || '',
+        fullProfile.companyName || fullProfile.nombre || ''
+      );
     }
   }
 
@@ -589,31 +693,41 @@ export class GeminiService {
     `;
 
     try {
-      const result = await this.withTimeout(
-        this.model.generateContent(enhancedPrompt),
-        25_000, // 25 segundos para generación ultra personalizada
+      const resp = await this.withTimeout(
+        callGeminiProxy({ prompt: enhancedPrompt }),
+        25_000,
         '⏰ Generando contenido personalizado... (25s máximo)'
       );
-      
-      const response = await result.response;
-      const text = response.text();
-      
-      // Extraer JSON de forma más robusta
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No se pudo procesar la respuesta de la IA');
+
+      const { parsed, text } = resp as { parsed?: any; text?: string };
+
+      let finalContent: LessonContent | null = null;
+      if (parsed && typeof parsed === 'object') {
+        finalContent = parsed as LessonContent;
+      } else {
+        const jsonMatch = (text || '').match(/\{[\s\S]*\}/);
+        if (jsonMatch) finalContent = JSON.parse(jsonMatch[0]) as LessonContent;
       }
-      
-      const parsed = JSON.parse(jsonMatch[0]) as LessonContent;
-      
-      console.log(`✅ Contenido generado para ${module} - ${topic}:`, parsed.title);
-      return parsed;
-      
+
+      if (finalContent) {
+        console.log(`✅ Contenido generado para ${module} - ${topic}:`, finalContent.title);
+        void publishToKnowledgeRepository({
+          title: finalContent.title || topic,
+          niche: businessContext || 'General',
+          areaId: module,
+          summary: finalContent.summary || '',
+          content: finalContent
+        });
+        return finalContent;
+      }
+
+      throw new Error('No se pudo procesar la respuesta de la IA');
     } catch (error) {
       console.error(`❌ Error generando contenido para ${module} - ${topic}:`, error);
       return this.buildEnhancedFallbackLesson(module, topic, businessContext);
     }
   }
+
 
   async generateQuizQuestions(module: string, businessContext: string, difficulty: 'basic' | 'intermediate' | 'advanced'): Promise<QuizQuestion[]> {
     const prompt = `
@@ -633,19 +747,23 @@ export class GeminiService {
     `;
 
     try {
-      const result = await this.withTimeout(
-        this.model.generateContent(prompt),
+      const resp = await this.withTimeout(
+        callGeminiProxy({ prompt }),
         20_000,
         'Tiempo de espera agotado al generar el quiz (20s).'
       );
-      const response = await result.response;
-      const text = response.text();
-      
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
+
+      const { parsed, text } = resp as { parsed?: any; text?: string };
+
+      if (Array.isArray(parsed)) {
+        return parsed as QuizQuestion[];
+      }
+
+      const jsonMatch = (text || '').match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
       }
-      
+
       throw new Error('No se pudo generar las preguntas de evaluación');
     } catch (error) {
       console.error('Error generando quiz:', error);

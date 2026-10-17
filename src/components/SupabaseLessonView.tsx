@@ -5,6 +5,7 @@ import EnhancedLessonView from './EnhancedLessonView';
 import { supabase } from '../supabase';
 import { Lesson } from '../types';
 import { getLessonById } from '../data/lessons';
+import { getCompanyIdForUser, recordLearningEvent } from '../services/learningEvents';
 
 type StructuredLessonPayload = {
   whatIs?: string;
@@ -221,6 +222,7 @@ export const SupabaseLessonView: React.FC<SupabaseLessonViewProps> = ({
 
       const updatedLessons = Array.from(new Set([...(currentProgress?.lessons_completed || []), lessonId]));
       const completionPercentage = Math.round((updatedLessons.length / 5) * 100);
+      let progressPersisted = false;
 
       if (currentProgress) {
         // Update existing progress
@@ -239,6 +241,7 @@ export const SupabaseLessonView: React.FC<SupabaseLessonViewProps> = ({
           console.error('Error updating progress:', updateError);
         } else {
           setCompleted(true);
+          progressPersisted = true;
         }
       } else {
         // Create new progress record
@@ -257,7 +260,19 @@ export const SupabaseLessonView: React.FC<SupabaseLessonViewProps> = ({
           console.error('Error creating progress:', insertError);
         } else {
           setCompleted(true);
+          progressPersisted = true;
         }
+      }
+
+      if (progressPersisted) {
+        void recordLearningEvent({
+          companyId: getCompanyIdForUser(user),
+          userId: user.id,
+          eventType: 'lesson_completed',
+          moduleKey: moduleId,
+          lessonKey: lessonId,
+          eventProperties: { completionPercentage }
+        });
       }
 
       onComplete();

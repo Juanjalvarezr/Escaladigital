@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/SupabaseAuthProvider';
-import CourseView from '../components/CourseView';
-import { BUSINESS_AREAS } from '../types';
+import { BUSINESS_AREAS, MODULE_CATALOG } from '../types';
 import { supabase } from '../supabase';
+import { LESSONS_PER_MODULE, QUIZZES_PER_MODULE } from '../data/courseConfig';
 
 interface ModuleProgress {
   id: string;
@@ -21,7 +21,6 @@ const AreaPage: React.FC = () => {
   const { user } = useAuth();
   const [area] = useState(BUSINESS_AREAS.find(a => a.id === areaId));
   const [modules, setModules] = useState<ModuleProgress[]>([]);
-  const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,101 +29,88 @@ const AreaPage: React.FC = () => {
       return;
     }
 
-    // Cargar progreso real desde Supabase
     const loadModulesProgress = async () => {
       if (!user) return;
 
       try {
         setLoading(true);
-        
-        // Timeout para no quedarse cargando indefinidamente
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => reject(new Error('Timeout loading progress')), 5000);
         });
 
-        // Obtener progreso de módulos desde Supabase
         const progressPromise = supabase
           .from('user_progress')
           .select('module_id, completion_percentage, lessons_completed, status')
           .eq('user_id', user.id);
 
-        const { data: progressData, error: progressError } = await Promise.race([progressPromise, timeoutPromise]) as any;
+        const { data: realProgressData, error } = await Promise.race([
+          progressPromise,
+          timeoutPromise
+        ]) as any;
 
-        if (progressError) {
-          console.error('Error loading progress:', progressError);
-          throw progressError;
+        if (error || error instanceof Error) {
+          const areaModules = MODULE_CATALOG[area.id as keyof typeof MODULE_CATALOG] || [];
+          setModules(areaModules.map(module => ({
+            id: module.id,
+            title: module.name,
+            description: module.description,
+            completedLessons: 0,
+            totalLessons: LESSONS_PER_MODULE,
+            completedQuizzes: 0,
+            totalQuizzes: QUIZZES_PER_MODULE,
+          })));
+          setLoading(false);
+          return;
         }
 
-        // Mapear progreso a módulos
         const moduleProgressMap = new Map();
-        progressData?.forEach((progress: any) => {
+        realProgressData?.forEach((progress: any) => {
           moduleProgressMap.set(progress.module_id, progress);
         });
 
-        // Crear módulos con progreso real
-        const modulesWithProgress: ModuleProgress[] = [
-          {
-            id: 'module-1',
-            title: 'Fundamentos',
-            description: 'Conceptos básicos y principios fundamentales',
-            completedLessons: moduleProgressMap.get('module-1')?.lessons_completed?.length || 0,
-            totalLessons: 5,
-            completedQuizzes: moduleProgressMap.get('module-1')?.completion_percentage >= 60 ? 1 : 0,
-            totalQuizzes: 2,
-          },
-          {
-            id: 'module-2',
-            title: 'Estrategias Avanzadas',
-            description: 'Técnicas y estrategias para el crecimiento',
-            completedLessons: moduleProgressMap.get('module-2')?.lessons_completed?.length || 0,
-            totalLessons: 6,
-            completedQuizzes: moduleProgressMap.get('module-2')?.completion_percentage >= 60 ? 1 : 0,
-            totalQuizzes: 2,
-          },
-          {
-            id: 'module-3',
-            title: 'Implementación Práctica',
-            description: 'Casos reales y aplicación práctica',
-            completedLessons: moduleProgressMap.get('module-3')?.lessons_completed?.length || 0,
-            totalLessons: 4,
-            completedQuizzes: moduleProgressMap.get('module-3')?.completion_percentage >= 60 ? 1 : 0,
-            totalQuizzes: 1,
-          },
-        ];
+        const areaModules = MODULE_CATALOG[area.id as keyof typeof MODULE_CATALOG] || [];
+        const modulesWithProgress: ModuleProgress[] = areaModules.map(module => {
+          const cloudData = moduleProgressMap.get(module.id);
+          let completedLessonsCount = Array.isArray(cloudData?.lessons_completed) ? cloudData.lessons_completed.length : 0;
+          let completedQuiz = (Number(cloudData?.completion_percentage) || 0) >= 60 ? 1 : 0;
+
+          try {
+            const stored = window.localStorage.getItem(`escala:progress:${user.id}:${module.id}`);
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              const localLessonsCount = Array.isArray(parsed.lessons_completed) ? parsed.lessons_completed.length : 0;
+              if (localLessonsCount > completedLessonsCount) {
+                completedLessonsCount = localLessonsCount;
+              }
+              if (Number(parsed.completion_percentage) >= 60) {
+                completedQuiz = 1;
+              }
+            }
+          } catch {}
+
+          return {
+            id: module.id,
+            title: module.name,
+            description: module.description,
+            completedLessons: completedLessonsCount,
+            totalLessons: LESSONS_PER_MODULE,
+            completedQuizzes: completedQuiz,
+            totalQuizzes: QUIZZES_PER_MODULE,
+          };
+        });
 
         setModules(modulesWithProgress);
       } catch (error) {
-        console.error('Error loading modules:', error);
-        // Fallback a módulos sin progreso
-        setModules([
-          {
-            id: 'module-1',
-            title: 'Fundamentos',
-            description: 'Conceptos básicos y principios fundamentales',
-            completedLessons: 0,
-            totalLessons: 5,
-            completedQuizzes: 0,
-            totalQuizzes: 2,
-          },
-          {
-            id: 'module-2',
-            title: 'Estrategias Avanzadas',
-            description: 'Técnicas y estrategias para el crecimiento',
-            completedLessons: 0,
-            totalLessons: 6,
-            completedQuizzes: 0,
-            totalQuizzes: 2,
-          },
-          {
-            id: 'module-3',
-            title: 'Implementación Práctica',
-            description: 'Casos reales y aplicación práctica',
-            completedLessons: 0,
-            totalLessons: 4,
-            completedQuizzes: 0,
-            totalQuizzes: 1,
-          },
-        ]);
+        const areaModules = MODULE_CATALOG[area.id as keyof typeof MODULE_CATALOG] || [];
+        setModules(areaModules.map(module => ({
+          id: module.id,
+          title: module.name,
+          description: module.description,
+          completedLessons: 0,
+          totalLessons: LESSONS_PER_MODULE,
+          completedQuizzes: 0,
+          totalQuizzes: QUIZZES_PER_MODULE,
+        })));
       } finally {
         setLoading(false);
       }
@@ -134,76 +120,60 @@ const AreaPage: React.FC = () => {
   }, [area, areaId, navigate, user]);
 
   const handleModuleClick = (moduleId: string) => {
-    setSelectedModule(moduleId);
+    navigate(`/area/${areaId}/module/${moduleId}`);
   };
 
   const handleBack = () => {
-    if (selectedModule) {
-      setSelectedModule(null);
-    } else {
-      navigate('/dashboard');
-    }
+    navigate('/dashboard');
   };
-
-  if (selectedModule) {
-    const module = modules.find(m => m.id === selectedModule);
-    return (
-      <CourseView 
-        moduleId={selectedModule}
-        moduleName={module?.title || 'Módulo'}
-        onBack={handleBack}
-      />
-    );
-  }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando módulos...</p>
-        </div>
+      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-electric-blue"></div>
       </div>
     );
   }
 
-  if (!area) {
-    return null;
-  }
+  if (!area) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className={`${area.color} text-white`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-dark-bg text-white pb-12">
+      {/* Header Premium */}
+      <header className="relative bg-dark-secondary border-b border-gray-800 overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-violet rounded-full mix-blend-screen filter blur-[100px] opacity-20"></div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
           <button
             onClick={handleBack}
-            className="mb-4 flex items-center text-white hover:text-gray-200 transition-colors"
+            className="mb-6 flex items-center text-gray-400 hover:text-electric-blue transition-colors group"
           >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Volver al dashboard
+            <span className="mr-2 group-hover:-translate-x-1 transition-transform">←</span>
+            Volver a la Torre de Control
           </button>
           
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold mb-2">{area.name}</h1>
-              <p className="text-lg opacity-90">{area.description}</p>
-            </div>
-            <div className="text-4xl">
-              {area.icon}
+              <div className="flex items-center mb-2">
+                <span className="text-4xl mr-4">{area.icon}</span>
+                <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
+                  {area.name}
+                </h1>
+              </div>
+              <p className="text-lg text-gray-400 max-w-2xl">{area.description}</p>
             </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Módulos de {area.name}</h2>
-          <p className="text-gray-600">
-            Completa los módulos en orden para dominar esta área de negocio.
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-white mb-2 flex items-center">
+            <span className="w-2 h-6 bg-electric-blue rounded-full mr-3"></span>
+            Módulos del Área
+          </h2>
+          <p className="text-gray-400">
+            Completa las fases estratégicas para escalar este pilar de tu negocio.
           </p>
         </div>
 
@@ -215,58 +185,41 @@ const AreaPage: React.FC = () => {
             );
 
             return (
-              <div
+              <article
                 key={module.id}
-                onClick={() => handleModuleClick(module.id)}
-                className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer overflow-hidden"
+                className="bg-dark-secondary border border-gray-800 rounded-2xl hover:border-violet/50 hover:shadow-[0_0_20px_rgba(110,86,207,0.15)] transition-all overflow-hidden group"
               >
                 <div className="p-6">
                   <div className="flex justify-between items-start mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">{module.title}</h3>
-                    <span className="text-sm font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                    <h3 className="text-xl font-bold text-white group-hover:text-violet transition-colors">{module.title}</h3>
+                    <span className="text-xs font-bold text-electric-blue bg-electric-blue/10 px-3 py-1 rounded-full uppercase tracking-wider border border-electric-blue/20">
                       {completionPercentage}%
                     </span>
                   </div>
                   
-                  <p className="text-gray-600 mb-4">{module.description}</p>
+                  <p className="text-gray-400 mb-6 min-h-[48px]">{module.description}</p>
                   
-                  <div className="space-y-3">
+                  <div className="space-y-4 mb-6">
                     <div>
-                      <div className="flex justify-between text-sm text-gray-600 mb-1">
-                        <span>Lecciones</span>
-                        <span>{module.completedLessons}/{module.totalLessons}</span>
+                      <div className="flex justify-between text-xs text-gray-400 mb-2 font-medium">
+                        <span>Lecciones Activas</span>
+                        <span className="text-white">{module.completedLessons}/{module.totalLessons}</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="w-full bg-dark-bg rounded-full h-1.5 border border-gray-800">
                         <div
-                          className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                          style={{ 
-                            width: `${(module.completedLessons / module.totalLessons) * 100}%` 
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <div className="flex justify-between text-sm text-gray-600 mb-1">
-                        <span>Quizzes</span>
-                        <span>{module.completedQuizzes}/{module.totalQuizzes}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-green-500 h-2 rounded-full transition-all duration-300"
-                          style={{ 
-                            width: `${(module.completedQuizzes / module.totalQuizzes) * 100}%` 
-                          }}
+                          className="bg-gradient-to-r from-electric-blue to-violet h-1.5 rounded-full transition-all duration-500"
+                          style={{ width: `${(module.completedLessons / module.totalLessons) * 100}%` }}
                         ></div>
                       </div>
                     </div>
                   </div>
                   
-                  <button className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors text-sm font-medium">
-                    {completionPercentage > 0 ? 'Continuar' : 'Comenzar'}
+                  <button onClick={() => handleModuleClick(module.id)} className="w-full bg-dark-tertiary hover:bg-violet/20 text-white border border-gray-700 hover:border-violet/50 py-3 px-4 rounded-xl transition-all text-sm font-bold flex justify-center items-center group-hover:text-electric-blue">
+                    {completionPercentage > 0 ? 'Continuar Plan' : 'Iniciar Plan'}
+                    <span className="ml-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">→</span>
                   </button>
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>

@@ -2,11 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/SupabaseAuthProvider';
 import { ModuleSidebar } from '../components/ModuleNavigation';
-import { SupabaseLessonView } from '../components/SupabaseLessonView';
+import { InteractiveLessonView } from '../components/learning/InteractiveLessonView';
 import { SupabaseQuizView } from '../components/SupabaseQuizView';
-import { BUSINESS_AREAS } from '../types';
+import ModuleView from '../components/ModuleView';
+import { BUSINESS_AREAS, MODULE_CATALOG, type AreaId } from '../types';
 import { supabase } from '../supabase';
 import { analytics } from '../services/analytics';
+// Import all complete modules
+import SALES_MODULE from '../data/modules/sales.module';
+import MARKETING_MODULE from '../data/modules/marketing.module';
+import MANAGEMENT_MODULE from '../data/modules/management.module';
+import OPERATIONS_MODULE from '../data/modules/operations.module';
+import FINANCE_MODULE from '../data/modules/finance.module';
+import TALENT_MODULE from '../data/modules/talent.module';
+import TECHNOLOGY_MODULE from '../data/modules/technology.module';
+import CUSTOMER_MODULE from '../data/modules/customer.module';
+import { LESSONS_PER_MODULE } from '../data/courseConfig';
 
 interface ModuleProgress {
   status: 'not_started' | 'in_progress' | 'completed';
@@ -34,12 +45,19 @@ const SupabaseModulePage: React.FC = () => {
   const [pendingLessonNumber, setPendingLessonNumber] = useState<number | null>(null);
   const [pendingView, setPendingView] = useState<'lesson' | 'quiz' | null>(null);
 
-  const module = BUSINESS_AREAS.find(area => area.id === moduleId);
-  const totalLessons = 5; // Fixed number of lessons per module
+  const normalizedAreaId = (moduleId?.split('-')[0] || 'management') as AreaId;
+  const module = MODULE_CATALOG[normalizedAreaId]?.find(item => item.id === moduleId);
+  const areaMeta = BUSINESS_AREAS.find(area => area.id === normalizedAreaId);
+  const totalLessons = LESSONS_PER_MODULE;
 
   useEffect(() => {
-    if (!moduleId || !module) {
+    if (!moduleId) {
       navigate('/dashboard');
+      return;
+    }
+
+    if (!module) {
+      navigate(`/area/${normalizedAreaId}`);
       return;
     }
 
@@ -57,7 +75,8 @@ const SupabaseModulePage: React.FC = () => {
         });
       }
     }
-  }, [moduleId, user, module, navigate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moduleId, user, module, normalizedAreaId, navigate]);
 
   useEffect(() => {
     if (!user?.user_metadata?.defaultCompanyId || !moduleId) return;
@@ -166,8 +185,9 @@ const SupabaseModulePage: React.FC = () => {
   };
 
   const handleLessonComplete = () => {
-    // Reload progress to update UI
+    // Reload progress to update UI and return to overview
     loadModuleProgress();
+    setCurrentView('overview');
   };
 
   const handleQuizComplete = (score: number) => {
@@ -200,6 +220,8 @@ const SupabaseModulePage: React.FC = () => {
   const handlePreviousLesson = () => {
     if (currentLesson > 1) {
       setCurrentLesson(currentLesson - 1);
+    } else {
+      setCurrentView('overview');
     }
   };
 
@@ -208,6 +230,29 @@ const SupabaseModulePage: React.FC = () => {
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet"></div>
       </div>
+    );
+  }
+
+  // Map of complete modules by moduleId
+  const completeModules: Record<string, typeof SALES_MODULE> = {
+    'sales-1': SALES_MODULE,
+    'marketing-1': MARKETING_MODULE,
+    'management-1': MANAGEMENT_MODULE,
+    'operations-1': OPERATIONS_MODULE,
+    'finance-1': FINANCE_MODULE,
+    'talent-1': TALENT_MODULE,
+    'technology-1': TECHNOLOGY_MODULE,
+    'customer-1': CUSTOMER_MODULE,
+  };
+
+  // Render complete modules with full content (ModuleView)
+  if (moduleId && moduleId in completeModules) {
+    const completeModule = completeModules[moduleId];
+    return (
+      <ModuleView 
+        module={completeModule}
+        onBack={() => navigate(`/area/${normalizedAreaId}`)}
+      />
     );
   }
 
@@ -230,7 +275,8 @@ const SupabaseModulePage: React.FC = () => {
         />
         
         <main className="flex-1">
-          <SupabaseLessonView
+          <InteractiveLessonView
+            areaId={normalizedAreaId}
             moduleId={moduleId as string}
             lessonId={`lesson-${currentLesson}`}
             onComplete={handleLessonComplete}
@@ -266,6 +312,8 @@ const SupabaseModulePage: React.FC = () => {
   const isCompleted = moduleProgress?.status === 'completed';
   const isInProgress = moduleProgress?.status === 'in_progress';
   const completedLessons = moduleProgress?.lessonsCompleted.length || 0;
+  const nextLesson = Math.min(completedLessons + 1, totalLessons);
+  const hasPassed = (moduleProgress?.quizScore || 0) >= 70;
 
   return (
     <div className="flex min-h-screen bg-dark-bg">
@@ -279,7 +327,7 @@ const SupabaseModulePage: React.FC = () => {
           {/* Header */}
           <div className="mb-8">
             <div className="flex items-center space-x-4 mb-4">
-              <span className="text-4xl">{module.icon}</span>
+              <span className="text-4xl">{areaMeta?.icon || '📘'}</span>
               <div>
                 <h1 className="text-3xl font-bold text-white">{module.name}</h1>
                 <p className="text-gray-400">Domina esta área clave para tu negocio</p>
@@ -297,12 +345,37 @@ const SupabaseModulePage: React.FC = () => {
                     {moduleProgress?.completionPercentage || 0}%
                   </span>
                 </div>
+
+                <div className="bg-gradient-to-r from-violet/20 to-electric-blue/10 rounded-xl border border-violet/40 p-6 mb-6">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-violet">Tu siguiente paso</span>
+                      <h2 className="text-xl font-bold text-white mt-1">
+                        {isCompleted || hasPassed ? 'Revisar resultados y elegir el siguiente módulo' : `Completar la Lección ${nextLesson}`}
+                      </h2>
+                      <p className="text-sm text-gray-300 mt-1">
+                        {isCompleted || hasPassed
+                          ? 'Tu progreso está guardado. Puedes repasar o continuar con otra área.'
+                          : 'Avanza en orden para desbloquear el contenido y completar la evaluación final.'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (isCompleted || hasPassed) setCurrentView('quiz');
+                        else handleContinueModule();
+                      }}
+                      className="shrink-0 px-5 py-3 rounded-lg bg-violet text-white font-semibold hover:bg-violet/90 transition-colors"
+                    >
+                      {isCompleted || hasPassed ? 'Ver evaluación' : `Continuar Lección ${nextLesson} →`}
+                    </button>
+                  </div>
+                </div>
                 <div className="w-full bg-gray-700 rounded-full h-3">
                   <div 
                     className="h-3 rounded-full transition-all duration-300"
                     style={{ 
                       width: `${moduleProgress?.completionPercentage || 0}%`,
-                      backgroundColor: module.color 
+                      backgroundColor: areaMeta?.color || '#8B5CF6' 
                     }}
                   ></div>
                 </div>

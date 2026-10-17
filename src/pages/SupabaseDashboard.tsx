@@ -4,6 +4,12 @@ import { useAuth } from '../components/SupabaseAuthProvider';
 import { ModuleSidebar } from '../components/ModuleNavigation';
 import { BUSINESS_AREAS } from '../types';
 import { supabase } from '../supabase';
+import {
+  aggregateLearningMetrics,
+  type LearningEventRecord,
+  type MetricValue
+} from '../services/learningMetrics';
+import { removeUserDiagnostic, writeUserDiagnostic } from '../utils/userScopedStorage';
 
 interface ModuleProgress {
   moduleId: string;
@@ -27,13 +33,36 @@ export const SupabaseDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [latestDiagnostic, setLatestDiagnostic] = useState<LatestDiagnostic | null>(null);
   const [diagnosticLoading, setDiagnosticLoading] = useState(false);
+  const [learningEvents, setLearningEvents] = useState<LearningEventRecord[]>([]);
+  const [eventsError, setEventsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
       loadModulesProgress();
       loadLatestDiagnostic();
+      loadLearningEvents();
     }
   }, [user]);
+
+  const loadLearningEvents = async () => {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('learning_events')
+      .select('id, user_id, event_type, module_key, lesson_key, quiz_key, event_properties')
+      .eq('user_id', user.id)
+      .order('occurred_at', { ascending: false })
+      .limit(500);
+
+    if (error) {
+      console.error('Error loading learning events:', error);
+      setEventsError('No pudimos cargar tus métricas todavía.');
+      return;
+    }
+
+    setEventsError(null);
+    setLearningEvents((data || []) as LearningEventRecord[]);
+  };
 
   const loadLatestDiagnostic = async () => {
     if (!user) return;
@@ -67,15 +96,12 @@ export const SupabaseDashboard: React.FC = () => {
       });
 
       try {
-        window.localStorage.setItem(
-          'escala:latestDiagnosticResult:v1',
-          JSON.stringify({
-            businessType: data.business_type,
-            mainChallenge: data.main_challenge,
-            scalabilityRoadmap: data.scalability_roadmap || [],
-            recommendedModules: data.recommended_modules || []
-          })
-        );
+        writeUserDiagnostic(user.id, {
+          businessType: data.business_type,
+          mainChallenge: data.main_challenge,
+          scalabilityRoadmap: data.scalability_roadmap || [],
+          recommendedModules: data.recommended_modules || []
+        });
       } catch {
         // ignore
       }
@@ -88,7 +114,7 @@ export const SupabaseDashboard: React.FC = () => {
 
   const handleRedoDiagnostic = () => {
     try {
-      window.localStorage.removeItem('escala:latestDiagnosticResult:v1');
+      removeUserDiagnostic(user?.id);
     } catch {
       // ignore
     }
@@ -139,8 +165,26 @@ export const SupabaseDashboard: React.FC = () => {
     return modulesProgress.filter(module => module.status === 'completed').length;
   };
 
+  const learningMetrics = aggregateLearningMetrics({
+    users: user ? [{ id: user.id }] : [],
+    moduleProgress: modulesProgress.map((module) => ({
+      userId: user?.id,
+      moduleId: module.moduleId,
+      status: module.status,
+      completionPercentage: module.completionPercentage,
+      lessonsCompleted: []
+    })),
+    learningEvents
+  });
+  const metricCards: Array<[string, MetricValue]> = [
+    ['Activación', learningMetrics.activation.activationRate],
+    ['Módulos completados', learningMetrics.learning.modulesCompleted],
+    ['Acciones aplicadas', learningMetrics.application.completedActions]
+  ];
+
   const handleModuleClick = (moduleId: string) => {
-    navigate(`/module/${moduleId}`);
+    const areaId = moduleId.includes('-') ? moduleId.split('-')[0] : moduleId;
+    navigate(`/area/${areaId}/module/${moduleId}`);
   };
 
   if (loading) {
@@ -168,6 +212,41 @@ export const SupabaseDashboard: React.FC = () => {
               Tu camino hacia la transformación digital continúa
             </p>
           </div>
+
+          <section className="mb-8" aria-labelledby="learning-metrics-title">
+            <div className="bg-dark-secondary rounded-xl p-6 border border-gray-700">
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <div>
+                  <h2 id="learning-metrics-title" className="text-xl font-semibold text-white">
+                    Tu avance medible
+                  </h2>
+                  <p className="text-sm text-gray-400">
+                    Calculado con tu progreso y actividad registrada.
+                  </p>
+                </div>
+                {eventsError && (
+                  <span className="text-xs text-amber-300" role="status">{eventsError}</span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {metricCards.map(([label, metric]) => (
+                  <div key={label} className="rounded-lg border border-gray-700 bg-dark-tertiary p-4">
+                    <div className="text-sm text-gray-400">{label}</div>
+                    <div className="mt-1 text-2xl font-semibold text-white">
+                      {metric.status === 'available' ? (
+                        `${metric.value}${metric.unit === 'percentage' ? '%' : ''}`
+                      ) : (
+                        'Sin datos'
+                      )}
+                    </div>
+                    {metric.status === 'insufficient_data' && (
+                      <div className="mt-1 text-xs text-gray-500">Completa una actividad para medirlo.</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
 
           {/* Learning Path (Latest Diagnostic) */}
           <div className="mb-8">
@@ -213,7 +292,7 @@ export const SupabaseDashboard: React.FC = () => {
                           return (
                             <button
                               key={moduleId}
-                              onClick={() => navigate(`/module/${moduleId}`)}
+                              onClick={() => navigate(`/area/${moduleId.split('-')[0]}/module/${moduleId}`)}
                               className="px-3 py-1.5 rounded-full bg-violet/15 border border-violet/30 text-violet hover:bg-violet/25 transition-colors text-sm"
                             >
                               {area ? area.name : moduleId}

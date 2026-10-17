@@ -60,8 +60,8 @@ src/
 # Copiar el archivo de ejemplo
 cp .env.example .env.local
 
-# Editar .env.local con tu API Key
-REACT_APP_GEMINI_API_KEY=tu_api_key_real_de_gemini
+# Configura GEMINI_API_KEY únicamente en el servidor del proxy.
+# Nunca publiques la clave en una variable REACT_APP_* ni dentro del frontend.
 ```
 
 ### **2. Mejoras Funcionales Inmediatas**
