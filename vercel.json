@@ -1,8 +1,23 @@
 {
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build"
+      }
     }
-  ]
+  ],
+  "env": {
+    "REACT_APP_SUPABASE_URL": {
+      "description": "URL de tu proyecto Supabase"
+    },
+    "REACT_APP_SUPABASE_ANON_KEY": {
+      "description": "Anon key de tu proyecto Supabase"
+    },
+    "REACT_APP_GEMINI_PROXY_URL": {
+      "description": "URL del proxy de Gemini (opcional, si se usa)"
+    }
+  }
 }
