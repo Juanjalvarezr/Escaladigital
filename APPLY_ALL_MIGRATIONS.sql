@@ -482,23 +482,24 @@ DO $$
 DECLARE
   table_name TEXT;
   missing_tables TEXT[] := '{}';
-BEGIN
-  FOREACH table_name IN ARRAY[
+  table_array TEXT[] := ARRAY[
     'companies', 'users', 'company_members', 'company_profiles',
     'learning_events', 'business_processes', 'business_actions',
     'user_progress', 'user_lessons', 'user_quizzes', 'user_diagnostics',
     'analytics_events', 'tool_clicks', 'platform_admins', 'admin_feedback'
-  ]
+  ];
+BEGIN
+  FOREACH table_name IN ARRAY table_array
   LOOP
     IF NOT EXISTS (
-      SELECT 1 FROM information_schema.tables 
-      WHERE table_schema = 'public' 
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public'
       AND table_name = table_name
     ) THEN
       missing_tables := array_append(missing_tables, table_name);
     END IF;
   END LOOP;
-  
+
   IF array_length(missing_tables, 1) > 0 THEN
     RAISE NOTICE 'Tablas faltantes: %', missing_tables;
   ELSE
