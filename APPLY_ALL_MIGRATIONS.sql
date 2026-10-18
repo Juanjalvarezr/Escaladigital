@@ -340,17 +340,25 @@ ALTER TABLE public.user_diagnostics ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
-  CREATE POLICY IF NOT EXISTS "Users can manage own progress" ON public.user_progress
-    FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'user_progress' AND policyname = 'Users can manage own progress') THEN
+    CREATE POLICY "Users can manage own progress" ON public.user_progress
+      FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+  END IF;
   
-  CREATE POLICY IF NOT EXISTS "Users can manage own lessons" ON public.user_lessons
-    FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'user_lessons' AND policyname = 'Users can manage own lessons') THEN
+    CREATE POLICY "Users can manage own lessons" ON public.user_lessons
+      FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+  END IF;
   
-  CREATE POLICY IF NOT EXISTS "Users can manage own quizzes" ON public.user_quizzes
-    FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'user_quizzes' AND policyname = 'Users can manage own quizzes') THEN
+    CREATE POLICY "Users can manage own quizzes" ON public.user_quizzes
+      FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+  END IF;
   
-  CREATE POLICY IF NOT EXISTS "Users can manage own diagnostics" ON public.user_diagnostics
-    FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'user_diagnostics' AND policyname = 'Users can manage own diagnostics') THEN
+    CREATE POLICY "Users can manage own diagnostics" ON public.user_diagnostics
+      FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+  END IF;
 END
 $$;
 
@@ -389,33 +397,39 @@ ALTER TABLE public.tool_clicks ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
-  CREATE POLICY IF NOT EXISTS "Members can insert analytics" ON public.analytics_events
-    FOR INSERT WITH CHECK (
-      EXISTS (
-        SELECT 1 FROM public.company_members cm
-        WHERE cm.company_id = analytics_events.company_id
-          AND cm.user_id = auth.uid()
-      )
-    );
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'analytics_events' AND policyname = 'Members can insert analytics') THEN
+    CREATE POLICY "Members can insert analytics" ON public.analytics_events
+      FOR INSERT WITH CHECK (
+        EXISTS (
+          SELECT 1 FROM public.company_members cm
+          WHERE cm.company_id = analytics_events.company_id
+            AND cm.user_id = auth.uid()
+        )
+      );
+  END IF;
   
-  CREATE POLICY IF NOT EXISTS "Owners/admins can view analytics" ON public.analytics_events
-    FOR SELECT USING (
-      EXISTS (
-        SELECT 1 FROM public.company_members cm
-        WHERE cm.company_id = analytics_events.company_id
-          AND cm.user_id = auth.uid()
-          AND cm.role IN ('owner', 'admin')
-      )
-    );
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'analytics_events' AND policyname = 'Owners/admins can view analytics') THEN
+    CREATE POLICY "Owners/admins can view analytics" ON public.analytics_events
+      FOR SELECT USING (
+        EXISTS (
+          SELECT 1 FROM public.company_members cm
+          WHERE cm.company_id = analytics_events.company_id
+            AND cm.user_id = auth.uid()
+            AND cm.role IN ('owner', 'admin')
+        )
+      );
+  END IF;
   
-  CREATE POLICY IF NOT EXISTS "Members can insert tool clicks" ON public.tool_clicks
-    FOR INSERT WITH CHECK (
-      EXISTS (
-        SELECT 1 FROM public.company_members cm
-        WHERE cm.company_id = tool_clicks.company_id
-          AND cm.user_id = auth.uid()
-      )
-    );
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'tool_clicks' AND policyname = 'Members can insert tool clicks') THEN
+    CREATE POLICY "Members can insert tool clicks" ON public.tool_clicks
+      FOR INSERT WITH CHECK (
+        EXISTS (
+          SELECT 1 FROM public.company_members cm
+          WHERE cm.company_id = tool_clicks.company_id
+            AND cm.user_id = auth.uid()
+        )
+      );
+  END IF;
 END
 $$;
 
@@ -442,18 +456,20 @@ ALTER TABLE public.admin_feedback ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
-  CREATE POLICY IF NOT EXISTS "Admins can manage platform_admins" ON public.platform_admins
-    FOR ALL USING (
-      EXISTS (
-        SELECT 1 FROM public.platform_admins pa
-        WHERE pa.user_id = auth.uid()
-      )
-    ) WITH CHECK (
-      EXISTS (
-        SELECT 1 FROM public.platform_admins pa
-        WHERE pa.user_id = auth.uid()
-      )
-    );
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'platform_admins' AND policyname = 'Admins can manage platform_admins') THEN
+    CREATE POLICY "Admins can manage platform_admins" ON public.platform_admins
+      FOR ALL USING (
+        EXISTS (
+          SELECT 1 FROM public.platform_admins pa
+          WHERE pa.user_id = auth.uid()
+        )
+      ) WITH CHECK (
+        EXISTS (
+          SELECT 1 FROM public.platform_admins pa
+          WHERE pa.user_id = auth.uid()
+        )
+      );
+  END IF;
 END
 $$;
 
