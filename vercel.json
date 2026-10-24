@@ -10,14 +10,8 @@
     }
   ],
   "env": {
-    "REACT_APP_SUPABASE_URL": {
-      "description": "URL de tu proyecto Supabase"
-    },
-    "REACT_APP_SUPABASE_ANON_KEY": {
-      "description": "Anon key de tu proyecto Supabase"
-    },
-    "REACT_APP_GEMINI_PROXY_URL": {
-      "description": "URL del proxy de Gemini (opcional, si se usa)"
-    }
+    "REACT_APP_SUPABASE_URL": "https://xymfoqajotosdepudonh.supabase.co",
+    "REACT_APP_SUPABASE_ANON_KEY": "eyJhbG...iuRI",
+    "REACT_APP_GEMINI_PROXY_URL": "/api/gemini"
   }
 }

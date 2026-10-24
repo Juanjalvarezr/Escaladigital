@@ -480,7 +480,7 @@ $$;
 -- Verificar que todas las tablas existen
 DO $$
 DECLARE
-  table_name TEXT;
+  current_table_name TEXT;
   missing_tables TEXT[] := '{}';
   table_array TEXT[] := ARRAY[
     'companies', 'users', 'company_members', 'company_profiles',
@@ -489,14 +489,14 @@ DECLARE
     'analytics_events', 'tool_clicks', 'platform_admins', 'admin_feedback'
   ];
 BEGIN
-  FOREACH table_name IN ARRAY table_array
+  FOREACH current_table_name IN ARRAY table_array
   LOOP
     IF NOT EXISTS (
       SELECT 1 FROM information_schema.tables
       WHERE table_schema = 'public'
-      AND table_name = table_name
+      AND table_name = current_table_name
     ) THEN
-      missing_tables := array_append(missing_tables, table_name);
+      missing_tables := array_append(missing_tables, current_table_name);
     END IF;
   END LOOP;
 
