@@ -33,7 +33,7 @@ export const useAuth = () => {
 export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const signInAnonymousInFlightRef = useRef<Promise<void> | null>(null);
   const lastAnonymousAttemptAtRef = useRef<number>(0);
@@ -231,12 +231,13 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     };
 
+    console.log('AuthProvider: init start');
     getInitialSession();
 
     const safetyTimeout = setTimeout(() => {
       console.warn('Auth init safety timeout - forcing loading=false');
       setLoading(false);
-    }, 12000);
+    }, 5000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       // Skip processing if initial session is still loading to prevent race condition
