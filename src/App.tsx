@@ -1,3 +1,4 @@
+/* eslint-disable import/first */
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,24 +10,25 @@ import { cache, preloadCriticalRoutes, measurePerformance } from './utils/perfor
 import { DiagnosticGeneratingView } from './components/DiagnosticGeneratingView';
 import UserActivityForm from './components/UserActivityForm';
 import AreaModuleCarousel from './components/AreaModuleCarousel';
-import AdminFeedbackPanel from './pages/AdminFeedbackPanel';
+const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
+const AreaPage = React.lazy(() => import('./pages/AreaPage'));
+const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
+const ModulesPage = React.lazy(() => import('./pages/ModulesPage'));
+const ProgressPage = React.lazy(() => import('./pages/ProgressPage'));
+const ProcessAcademyPage = React.lazy(() => import('./pages/ProcessAcademyPage'));
+const PublicDemoPage = React.lazy(() => import('./pages/PublicDemoPage'));
+const AuthPage = React.lazy(() => import('./pages/AuthPage'));
+const TeamPage = React.lazy(() => import('./pages/TeamPage'));
+const PlatformAdminPage = React.lazy(() => import('./pages/PlatformAdminPage'));
+const GuestJourneyPage = React.lazy(() => import('./pages/GuestJourneyPage'));
+const SupabaseModulePage = React.lazy(() => import('./pages/SupabaseModulePage'));
+const AdminFeedbackPanel = React.lazy(() => import('./pages/AdminFeedbackPanel'));
+import { Suspense } from 'react';
 import SupabaseDiagnostic from './components/SupabaseDiagnostic';
-import SupabaseModulePage from './pages/SupabaseModulePage';
 import InteractiveLessonView from './components/learning/InteractiveLessonView';
 import SupabaseQuizView from './components/SupabaseQuizView';
-import DashboardPage from './pages/DashboardPage';
-import AreaPage from './pages/AreaPage';
-import ProfilePage from './pages/ProfilePage';
-import ModulesPage from './pages/ModulesPage';
-import ProgressPage from './pages/ProgressPage';
 import IntroPage from './pages/IntroPage';
-import ProcessAcademyPage from './pages/ProcessAcademyPage';
-import PublicDemoPage from './pages/PublicDemoPage';
-import AuthPage from './pages/AuthPage';
-import TeamPage from './pages/TeamPage';
-import PlatformAdminPage from './pages/PlatformAdminPage';
 import PlatformAdminRoute from './components/PlatformAdminRoute';
-import GuestJourneyPage from './pages/GuestJourneyPage';
 import { DiagnosticResult } from './services/gemini';
 import { flushLearningEventQueue, getCompanyIdForUser, recordLearningEvent } from './services/learningEvents';
 import { readGuestWorkshopProgress, readUserDiagnostic, writeUserDiagnostic } from './utils/userScopedStorage';
@@ -373,6 +375,7 @@ const AppContent: React.FC = () => {
       {/* Global UX overlays */}
       <BadgeNotification />
 
+<Suspense fallback={<div className="min-h-screen flex items-center justify-center">Cargando...</div>}>
       <Routes>
         <Route path="/demo" element={<PublicDemoPage />} />
         <Route path="/mi-ruta" element={<GuestJourneyPage />} />
@@ -405,6 +408,7 @@ const AppContent: React.FC = () => {
           <IntroPage />
         )} />
       </Routes>
+      </Suspense>
       {/* Contenedor de notificaciones toast */}
       <ToastContainer />
     </div>

@@ -1,17 +1,11 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "build"
-      }
-    }
-  ],
   "env": {
     "REACT_APP_SUPABASE_URL": "https://xymfoqajotosdepudonh.supabase.co",
-    "REACT_APP_SUPABASE_ANON_KEY": "eyJhbG...iuRI",
+    "REACT_APP_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5bWZvcWFqb3Rvc2RlcHVkb25oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5MDUzNTksImV4cCI6MjEwNDQ4MTM1OX0.LhHmXMs0lwnMiIXcD2P6oYfc5hJhAKkbuO5cLa1iuRI",
     "REACT_APP_GEMINI_PROXY_URL": "/api/gemini"
-  }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

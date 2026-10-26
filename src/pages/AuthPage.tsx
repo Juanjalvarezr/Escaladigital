@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/SupabaseAuthProvider';
 import { isSupabaseConfigured, supabase } from '../supabase';
+import { signInSchema, signUpSchema } from '../schemas/auth';
 
 const readPendingPath = () => {
   try {
@@ -83,6 +84,13 @@ const AuthPage: React.FC = () => {
     setSubmitting(true);
 
     try {
+      const schema = mode === 'signup' ? signUpSchema : signInSchema;
+      const parsed = schema.safeParse({ email: email.trim(), password, displayName: name.trim() });
+      if (!parsed.success) {
+        setError(parsed.error.issues[0]?.message || 'Datos inválidos');
+        setSubmitting(false);
+        return;
+      }
       if (mode === 'signup') {
         await signUpWithEmail(email.trim(), password, {
           email: email.trim(),
