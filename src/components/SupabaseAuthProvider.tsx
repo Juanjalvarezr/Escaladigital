@@ -287,7 +287,10 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
 
         console.log('Anonymous sign in successful:', data);
-        setAuthError('Supabase no está disponible. Estás usando el modo local; tus avances se guardan en este dispositivo.');
+
+        if (user) {
+          await updateUserProfile({ lastLogin: new Date() });
+        }
       } catch (error) {
         console.warn('Error in signInAnonymous, using resilient local user:', error);
         const guestId = 'guest_' + (window.localStorage.getItem('escala:guest_id') || Math.random().toString(36).substring(2, 9));
