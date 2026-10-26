@@ -22,13 +22,17 @@ const PlatformAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children 
     setAccess('checking');
     void (async () => {
       try {
-        const { data, error } = await supabase.rpc('get_platform_summary');
+        const { data, error } = await supabase
+          .from('platform_admins')
+          .select('user_id')
+          .eq('user_id', user.id)
+          .single();
         if (!active) return;
-        if (error) {
-          setAccess('unavailable');
+        if (error || !data) {
+          setAccess('denied');
           return;
         }
-        setAccess(Array.isArray(data) && data.length > 0 ? 'allowed' : 'denied');
+        setAccess('allowed');
       } catch {
         if (active) setAccess('unavailable');
       }
