@@ -34,10 +34,15 @@ const AuthPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const requestedNextPath = new URLSearchParams(location.search).get('next');
   const nextCandidate = requestedNextPath || readPendingPath() || '/dashboard';
   const nextPath = nextCandidate.startsWith('/') ? nextCandidate : '/dashboard';
   const inviteToken = new URLSearchParams(location.search).get('invite');
+
+  useEffect(() => {
+    if (nextPath.includes('/platform-admin')) {
+      setMode('signin');
+    }
+  }, [nextPath]);
 
   const getAuthMessage = (authError: unknown) => {
     const msg = authError instanceof Error ? authError.message : '';
