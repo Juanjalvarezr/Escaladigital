@@ -160,7 +160,13 @@ const DashboardPage: React.FC = () => {
       }
     };
 
-    loadRealProgress();
+    const timeoutId = setTimeout(() => {
+      console.warn('Dashboard load timeout - forcing loading=false');
+      setLoading(false);
+      setProgress(createEmptyProgress());
+    }, 15000);
+
+    loadRealProgress().finally(() => clearTimeout(timeoutId));
   }, [user, recordActivity, dailyChallengeCompleted]);
 
   const handleAreaClick = (areaId: string) => {

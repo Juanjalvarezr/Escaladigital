@@ -80,6 +80,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const ensureCompanyForUser = useCallback(async (userId: string, displayName?: string): Promise<string | undefined> => {
     try {
+      console.log('ensureCompanyForUser: start', userId);
       const { data: current, error: currentError } = await supabase
         .from('users')
         .select('default_company_id, company, industry')
@@ -310,10 +311,9 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const signInWithEmail = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
+      const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
+        Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Login timeout')), ms))]);
+      const { error } = await withTimeout(supabase.auth.signInWithPassword({ email, password }), 10000);
 
       if (error) {
         console.error('Error signing in with email:', error);
