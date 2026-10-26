@@ -233,6 +233,11 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     getInitialSession();
 
+    const safetyTimeout = setTimeout(() => {
+      console.warn('Auth init safety timeout - forcing loading=false');
+      setLoading(false);
+    }, 12000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       // Skip processing if initial session is still loading to prevent race condition
       if (!initialSessionLoadedRef.current) {
@@ -250,7 +255,10 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
+    };
   }, [formatUnknownError, loadUserProfile]);
 
   const signInAnonymous = async () => {
