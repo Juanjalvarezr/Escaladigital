@@ -33,7 +33,7 @@ export const useAuth = () => {
 export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const signInAnonymousInFlightRef = useRef<Promise<void> | null>(null);
   const lastAnonymousAttemptAtRef = useRef<number>(0);
@@ -236,6 +236,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const safetyTimeout = setTimeout(() => {
       console.warn('Auth init safety timeout - forcing loading=false');
+      initialSessionLoadedRef.current = true;
       setLoading(false);
     }, 5000);
 
@@ -323,19 +324,16 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const signInWithEmail = async (email: string, password: string) => {
     try {
-      const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
-        Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Login timeout')), ms))]);
-      const { error } = await withTimeout(supabase.auth.signInWithPassword({ email, password }), 10000);
-
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         console.error('Error signing in with email:', error);
         throw error;
       }
 
-      // Update session after successful login
-      const { data: { session: newSession } } = await supabase.auth.getSession();
-      if (newSession) {
-        setSession(newSession);
+      if (data?.session) {
+        setSession(data.session);
+        setUser(data.session.user);
+        await loadUserProfile(data.session.user.id);
       }
     } catch (error) {
       console.error('Error in signInWithEmail:', error);

@@ -127,7 +127,7 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     if (isSupabaseConfigured && !loading && !user) {
-      signInAnonymous();
+      // anonymous sign-in disabled; users must sign in with email/magic link
     }
   }, [user, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
