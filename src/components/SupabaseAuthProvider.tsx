@@ -332,8 +332,10 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         throw error;
       }
 
-      if (user) {
-        await updateUserProfile({ lastLogin: new Date() });
+      // Update session after successful login
+      const { data: { session: newSession } } = await supabase.auth.getSession();
+      if (newSession) {
+        setSession(newSession);
       }
     } catch (error) {
       console.error('Error in signInWithEmail:', error);
