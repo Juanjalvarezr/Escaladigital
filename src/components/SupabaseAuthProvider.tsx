@@ -234,6 +234,8 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     console.log('AuthProvider: init start');
     getInitialSession();
 
+    console.log('AuthProvider: after getInitialSession call, loading=', loading, 'user=', user?.email);
+
     const safetyTimeout = setTimeout(() => {
       console.warn('Auth init safety timeout - forcing loading=false');
       initialSessionLoadedRef.current = true;
@@ -261,7 +263,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       clearTimeout(safetyTimeout);
       subscription.unsubscribe();
     };
-  }, [formatUnknownError, loadUserProfile]);
+  }, [formatUnknownError, loadUserProfile, loading, user]);
 
   const signInAnonymous = async () => {
     if (signInAnonymousInFlightRef.current) {
