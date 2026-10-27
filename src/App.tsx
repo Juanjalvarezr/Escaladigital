@@ -45,7 +45,7 @@ const hasPendingGuestReturn = () => {
 const hasSavedGuestJourney = () => Boolean(readUserDiagnostic<DiagnosticResult>(null));
 
 const AppContent: React.FC = () => {
-  const { user, loading, signInAnonymous, authError } = useAuth();
+  const { user, loading, authError } = useAuth();
   const isRegisteredUser = Boolean(user?.email && !user.id.startsWith('guest_'));
   const navigate = useNavigate();
   const location = useLocation();
