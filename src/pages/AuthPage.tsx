@@ -121,6 +121,7 @@ const AuthPage: React.FC = () => {
         if (hasPermanentAccount) navigate(nextPath, { replace: true });
       } else {
         await signInWithEmail(email.trim(), password);
+        console.log('AuthPage: after signInWithEmail, user=', user?.email, 'loading=', loading);
         if (inviteToken) await claimCompanyInvitation(inviteToken);
       }
     } catch (authError: any) {
