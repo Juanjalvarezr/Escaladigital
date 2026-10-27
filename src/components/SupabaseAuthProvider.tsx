@@ -335,6 +335,8 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setUser(data.session.user);
         await loadUserProfile(data.session.user.id);
       }
+
+      return data?.user ?? null;
     } catch (error) {
       console.error('Error in signInWithEmail:', error);
       throw error;

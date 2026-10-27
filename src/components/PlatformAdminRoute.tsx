@@ -26,14 +26,16 @@ const PlatformAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children 
           .from('platform_admins')
           .select('user_id')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
+        console.log('PlatformAdminRoute check', { userId: user.id, data, error });
         if (!active) return;
         if (error || !data) {
           setAccess('denied');
           return;
         }
         setAccess('allowed');
-      } catch {
+      } catch (e) {
+        console.error('PlatformAdminRoute exception', e);
         if (active) setAccess('unavailable');
       }
     })();
