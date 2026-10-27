@@ -45,6 +45,12 @@ const AuthPage: React.FC = () => {
     }
   }, [nextPath]);
 
+  useEffect(() => {
+    if (hasPermanentAccount) {
+      navigate(nextPath, { replace: true });
+    }
+  }, [navigate, nextPath, hasPermanentAccount]);
+
   const getAuthMessage = (authError: unknown) => {
     const msg = authError instanceof Error ? authError.message : '';
     if (msg.toLowerCase().includes('rate limit')) {
@@ -116,7 +122,6 @@ const AuthPage: React.FC = () => {
       } else {
         await signInWithEmail(email.trim(), password);
         if (inviteToken) await claimCompanyInvitation(inviteToken);
-        navigate(nextPath, { replace: true });
       }
     } catch (authError: any) {
       const msg = authError?.message || '';
