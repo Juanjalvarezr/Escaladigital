@@ -12,7 +12,7 @@ interface AuthContextType {
   signInAnonymous: () => Promise<void>;
   signInWithMagicLink: (email: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
-  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<SupabaseUser | void>;
   signUpWithEmail: (email: string, password: string, userData: Partial<User>) => Promise<void>;
   claimCompanyInvitation: (token: string) => Promise<void>;
   logout: () => Promise<void>;
