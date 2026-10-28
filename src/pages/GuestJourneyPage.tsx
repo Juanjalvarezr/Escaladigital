@@ -122,6 +122,10 @@ const GuestJourneyPage: React.FC = () => {
     writeGuestWorkshopProgress(nextProgress);
     setProgress(nextProgress);
 
+    if (completed) {
+      try { window.localStorage.setItem('escala:firstModuleCompleted:v1', 'true'); } catch {}
+    }
+
     if (user?.email && !user.id.startsWith('guest_')) {
       void supabase.from('user_progress').upsert({
         user_id: user.id,
