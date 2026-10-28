@@ -30,6 +30,7 @@ const PlatformAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children 
         console.log('PlatformAdminRoute check', { userId: user.id, data, error });
         if (!active) return;
         if (error || !data) {
+          console.error('PlatformAdminRoute denied', { userId: user.id, data, error });
           setAccess('denied');
           return;
         }
@@ -47,7 +48,7 @@ const PlatformAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children 
     return <main className="min-h-screen bg-dark-bg text-white flex items-center justify-center">Verificando acceso administrativo...</main>;
   }
   if (access === 'denied') {
-    return user ? <main className="min-h-screen bg-dark-bg text-white flex items-center justify-center p-6"><p role="alert">Esta cuenta no tiene permisos de administración.</p></main> : <Navigate to="/auth?next=%2Fplatform-admin" replace />;
+    return user ? <main className="min-h-screen bg-dark-bg text-white flex items-center justify-center p-6"><p role="alert">Esta cuenta no tiene permisos de administración. (userId: {user.id})</p></main> : <Navigate to="/auth?next=%2Fplatform-admin" replace />;
   }
   if (access === 'unavailable') {
     return <main className="min-h-screen bg-dark-bg text-white flex items-center justify-center p-6"><p role="alert">No se pudo verificar el acceso con Supabase. Comprueba la configuración y las migraciones administrativas.</p></main>;
