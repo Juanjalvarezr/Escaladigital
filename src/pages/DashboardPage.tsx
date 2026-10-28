@@ -54,17 +54,19 @@ const DashboardPage: React.FC = () => {
     setDiagnostic(readUserDiagnostic<DiagnosticResult>(user?.id) || readUserDiagnostic<DiagnosticResult>(null));
 
     // Show daily challenge modal if not completed
+    const modalTimerRef = { current: null as number | null };
     if (!dailyChallengeCompleted) {
-      const timer = setTimeout(() => {
+      modalTimerRef.current = window.setTimeout(() => {
         setShowDailyChallenge(true);
       }, 1500); // Show after 1.5s for smooth UX
-      return () => clearTimeout(timer);
     }
 
     if (!user?.email || user.id.startsWith('guest_')) {
       setProgress(createEmptyProgress());
       setLoading(false);
-      return;
+      return () => {
+        if (modalTimerRef.current) window.clearTimeout(modalTimerRef.current);
+      };
     }
 
     const loadRealProgress = async () => {
@@ -160,13 +162,18 @@ const DashboardPage: React.FC = () => {
       }
     };
 
-    const timeoutId = setTimeout(() => {
+    const timeoutId = window.setTimeout(() => {
       console.warn('Dashboard load timeout - forcing loading=false');
       setLoading(false);
       setProgress(createEmptyProgress());
     }, 15000);
 
-    loadRealProgress().finally(() => clearTimeout(timeoutId));
+    loadRealProgress().finally(() => window.clearTimeout(timeoutId));
+
+    return () => {
+      if (modalTimerRef.current) window.clearTimeout(modalTimerRef.current);
+      window.clearTimeout(timeoutId);
+    };
   }, [user, recordActivity, dailyChallengeCompleted]);
 
   const handleAreaClick = (areaId: string) => {

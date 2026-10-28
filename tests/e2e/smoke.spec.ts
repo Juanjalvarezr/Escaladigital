@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 
 test('home loads', async ({ page }) => {
-  await page.goto('https://escala-digital-app.vercel.app');
-  await expect(page).toHaveTitle(/React App/);
+  await page.goto('https://escaladigital-two.vercel.app');
+  await expect(page).toHaveTitle(/Escala Digital/);
 });
 
 test('auth page loads', async ({ page }) => {
