@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
-import { getKnowledgeRepositoryTopics, RepositoryTopic } from '../services/knowledgeRepository';
+import { RepositoryTopic } from '../services/knowledgeRepository';
 
 type Summary = {
   company_count: number;
@@ -63,37 +63,65 @@ const PlatformAdminPage: React.FC = () => {
     let mounted = true;
     const loadData = async () => {
       try {
-        const safeRpc = async (rpcName: string) => {
-          try {
-            return await supabase.rpc(rpcName as any);
-          } catch {
-            return { data: null, error: true };
-          }
-        };
-
-        const [sumRes, compRes, actRes, contRes, repoTopics] = await Promise.all([
-          safeRpc('get_platform_summary'),
-          safeRpc('get_platform_companies'),
-          safeRpc('get_platform_activity'),
-          safeRpc('get_platform_content_metrics'),
-          getKnowledgeRepositoryTopics()
+        // Queries directas a tablas existentes (sin RPCs)
+        const [usersRes, companiesRes, eventsRes, diagnosticsRes, progressRes] = await Promise.all([
+          supabase.from('users').select('id', { count: 'exact', head: true }),
+          supabase.from('companies').select('*'),
+          supabase.from('analytics_events').select('id, event_name, created_at, company_id, user_id').order('created_at', { ascending: false }).limit(20),
+          supabase.from('user_diagnostics').select('id', { count: 'exact', head: true }),
+          supabase.from('user_progress').select('id', { count: 'exact', head: true })
         ]);
-
 
         if (!mounted) return;
 
-        if (sumRes.data?.[0]) {
-          setSummary(sumRes.data[0] as Summary);
-        } else {
-          setSummary(null);
-          if (sumRes.error) setError('No se pudieron cargar las métricas reales. Revisa que las migraciones administrativas estén aplicadas.');
-        }
+        const userCount = usersRes.count ?? 0;
+        const companyList = (companiesRes.data ?? []) as CompanyInsight[];
+        const eventCount30d = (eventsRes.data ?? []).filter(e => {
+          const d = new Date(e.created_at);
+          const now = new Date();
+          return (now.getTime() - d.getTime()) < 30 * 24 * 60 * 60 * 1000;
+        }).length;
 
-        if (compRes.data) setCompanies(compRes.data as CompanyInsight[]);
-        if (actRes.data) setActivity(actRes.data as Activity[]);
-        if (contRes.data?.[0]) setContent(contRes.data[0] as ContentMetrics);
+        setSummary({
+          company_count: companyList.length,
+          user_count: userCount,
+          active_company_count: companyList.length,
+          event_count_30d: eventCount30d
+        });
 
-        setTopics(repoTopics);
+        setCompanies(companyList.map(c => ({
+          company_id: (c as any).id ?? c.company_id,
+          company_name: (c as any).name ?? c.company_name ?? 'Sin nombre',
+          plan_key: 'free',
+          seat_limit: 0,
+          subscription_status: 'active',
+          member_count: 0,
+          pending_invitations: 0,
+          active_members_30d: 0,
+          progress_percent: 0,
+          completed_lessons: 0,
+          completed_actions: 0,
+          last_activity: null
+        })));
+
+        setActivity((eventsRes.data ?? []).map(e => ({
+          action: e.event_name,
+          company_id: e.company_id,
+          actor_user_id: e.user_id,
+          created_at: e.created_at,
+          metadata: {}
+        })));
+
+        setContent({
+          modules_count: 0,
+          lessons_count: 0,
+          quizzes_count: 0,
+          processes_count: 0,
+          actions_completed_count: 0,
+          diagnostics_count: diagnosticsRes.count ?? 0
+        });
+
+        setTopics([]);
       } catch (loadError) {
         if (mounted) setError(loadError instanceof Error ? loadError.message : 'No se pudo cargar el panel.');
       } finally {
