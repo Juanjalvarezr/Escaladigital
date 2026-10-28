@@ -43,6 +43,9 @@ const hasPendingGuestReturn = () => {
 };
 
 const hasSavedGuestJourney = () => Boolean(readUserDiagnostic<DiagnosticResult>(null));
+const hasCompletedFirstModule = () => {
+  try { return window.localStorage.getItem('escala:firstModuleCompleted:v1') === 'true'; } catch { return false; }
+};
 
 const AppContent: React.FC = () => {
   const { user, loading, authError } = useAuth();
@@ -385,7 +388,7 @@ const AppContent: React.FC = () => {
         <Route path="/modules" element={isRegisteredUser ? <ModulesPage /> : <Navigate to="/auth?next=%2Fmodules" />} />
         <Route path="/progress" element={isRegisteredUser ? <ProgressPage /> : <Navigate to="/auth?next=%2Fprogress" />} />
         <Route path="/academia-procesos" element={isRegisteredUser ? <ProcessAcademyPage /> : <Navigate to="/" />} />
-        <Route path="/area/:areaId" element={isRegisteredUser ? <AreaPage /> : <Navigate to={hasSavedGuestJourney() ? '/mi-ruta' : '/'} />} />
+        <Route path="/area/:areaId" element={isRegisteredUser ? <AreaPage /> : (hasSavedGuestJourney() ? (hasCompletedFirstModule() ? <Navigate to="/auth?next=%2Fdashboard" /> : <Navigate to="/mi-ruta" />) : <Navigate to="/" />)} />
         <Route path="/module/:moduleId" element={<LegacyModuleRoute />} />
         <Route path="/module/:moduleId/lesson/:lessonId" element={<LegacyLessonRoute />} />
         <Route path="/area/:areaId/module/:moduleId" element={isRegisteredUser ? <SupabaseModulePage /> : <Navigate to="/auth?next=%2Fdashboard" />} />
