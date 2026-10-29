@@ -67,7 +67,7 @@ const PlatformAdminPage: React.FC = () => {
         // Queries directas a tablas existentes (sin RPCs)
         const [usersRes, companiesRes, eventsRes, diagnosticsRes, progressRes] = await Promise.all([
           supabase.from('users').select('id', { count: 'exact', head: true }),
-          supabase.from('companies').select('*'),
+          supabase.from('companies').select('id as company_id, name as company_name, plan_key, seat_limit, subscription_status, created_at'),
           supabase.from('analytics_events').select('id, event_name, created_at, company_id, user_id').order('created_at', { ascending: false }).limit(20),
           supabase.from('user_diagnostics').select('id', { count: 'exact', head: true }),
           supabase.from('user_progress').select('id', { count: 'exact', head: true })
@@ -75,12 +75,41 @@ const PlatformAdminPage: React.FC = () => {
 
         if (!mounted) return;
 
+        if (usersRes.error) {
+          console.error('Admin panel users query error', usersRes.error);
+        }
+        if (companiesRes.error) {
+          console.error('Admin panel companies query error', companiesRes.error);
+        }
+        if (eventsRes.error) {
+          console.error('Admin panel events query error', eventsRes.error);
+        }
+        if (diagnosticsRes.error) {
+          console.error('Admin panel diagnostics query error', diagnosticsRes.error);
+        }
+        if (progressRes.error) {
+          console.error('Admin panel progress query error', progressRes.error);
+        }
+
         const userCount = usersRes.count ?? 0;
-        const companyList = (companiesRes.data ?? []) as CompanyInsight[];
-        const eventCount30d = (eventsRes.data ?? []).filter(e => {
+        const companyList = ((companiesRes.data ?? []) as any[]).map((c) => ({
+          company_id: c.company_id ?? c.id,
+          company_name: c.company_name ?? c.name ?? 'Sin nombre',
+          plan_key: c.plan_key ?? 'free',
+          seat_limit: c.seat_limit ?? 0,
+          subscription_status: c.subscription_status ?? 'active',
+          member_count: 0,
+          pending_invitations: 0,
+          active_members_30d: 0,
+          progress_percent: 0,
+          completed_lessons: 0,
+          completed_actions: 0,
+          last_activity: null
+        }));
+        const eventCount30d = (eventsRes.data ?? []).filter((e) => {
           const d = new Date(e.created_at);
           const now = new Date();
-          return (now.getTime() - d.getTime()) < 30 * 24 * 60 * 60 * 1000;
+          return now.getTime() - d.getTime() < 30 * 24 * 60 * 60 * 1000;
         }).length;
 
         setSummary({
@@ -90,20 +119,7 @@ const PlatformAdminPage: React.FC = () => {
           event_count_30d: eventCount30d
         });
 
-        setCompanies(companyList.map(c => ({
-          company_id: (c as any).id ?? c.company_id,
-          company_name: (c as any).name ?? c.company_name ?? 'Sin nombre',
-          plan_key: 'free',
-          seat_limit: 0,
-          subscription_status: 'active',
-          member_count: 0,
-          pending_invitations: 0,
-          active_members_30d: 0,
-          progress_percent: 0,
-          completed_lessons: 0,
-          completed_actions: 0,
-          last_activity: null
-        })));
+        setCompanies(companyList);
 
         setActivity((eventsRes.data ?? []).map(e => ({
           action: e.event_name,
