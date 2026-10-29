@@ -65,7 +65,7 @@ const GuestJourneyPage: React.FC = () => {
 
   // Modal de guardado de cuenta
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [modalMode, setModalMode] = useState<'signup' | 'signin'>('signup');
+  const [modalMode, setModalMode] = useState<'signin' | 'signup'>('signin');
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState(() => profile.nombre || '');
@@ -605,10 +605,10 @@ const GuestJourneyPage: React.FC = () => {
                   <ShieldCheck className="w-6 h-6 text-white" />
                 </div>
                 <h3 className="text-2xl font-black text-white">
-                  {modalMode === 'signup' ? 'Guarda tu Ruta en la Nube' : 'Vincular a tu Cuenta'}
+                  {modalMode === 'signin' ? 'Inicia sesión para vincular tu progreso' : 'Crea una cuenta y guarda tu progreso'}
                 </h3>
                 <p className="text-xs text-gray-400 mt-1">
-                  Tu progreso, diagnóstico y lecciones quedarán protegidos y accesibles desde cualquier dispositivo.
+                  Así puedes continuar desde cualquier dispositivo sin perder tu diagnóstico ni tu ruta.
                 </p>
               </div>
 
@@ -680,7 +680,7 @@ const GuestJourneyPage: React.FC = () => {
                   disabled={authSubmitting}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-electric-blue to-violet text-white font-bold text-sm shadow-lg shadow-violet-500/25 hover:opacity-95 transition disabled:opacity-50 mt-2"
                 >
-                  {authSubmitting ? 'Guardando...' : modalMode === 'signup' ? 'Crear Cuenta y Vincular Avance' : 'Iniciar Sesión y Vincular'}
+                  {authSubmitting ? 'Guardando...' : modalMode === 'signin' ? 'Entrar y sincronizar mi avance' : 'Crear cuenta y sincronizar mi avance'}
                 </button>
               </form>
 
@@ -701,11 +701,11 @@ const GuestJourneyPage: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setAuthError(null);
-                      setModalMode(modalMode === 'signup' ? 'signin' : 'signup');
+                      setModalMode(modalMode === 'signin' ? 'signup' : 'signin');
                     }}
                     className="text-xs text-violet-400 hover:text-violet-300 hover:underline"
                   >
-                    {modalMode === 'signup' ? '¿Ya tienes cuenta? Inicia sesión aquí' : '¿No tienes cuenta aún? Crear una nueva'}
+                    {modalMode === 'signin' ? '¿Aún no tienes cuenta? Crear una nueva' : '¿Ya tienes cuenta? Entrar aquí'}
                   </button>
                 </div>
               </div>

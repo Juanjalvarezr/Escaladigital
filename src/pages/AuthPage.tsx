@@ -25,7 +25,7 @@ const AuthPage: React.FC = () => {
   const location = useLocation();
   const { user, signInWithEmail, signUpWithEmail, signInWithMagicLink, claimCompanyInvitation } = useAuth();
   const hasPermanentAccount = Boolean(user?.email && !user.is_anonymous && !user.id.startsWith('guest_'));
-  const [mode, setMode] = useState<'signin' | 'signup'>('signup');
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState(() => readGuestProfile().nombre || '');
