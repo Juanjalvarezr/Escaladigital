@@ -39,6 +39,7 @@ type ContentMetrics = {
   processes_count: number;
   actions_completed_count: number;
   diagnostics_count: number;
+  progress_count: number;
 };
 
 type TabType = 'analytics' | 'repository' | 'impact' | 'companies';
@@ -64,7 +65,7 @@ const PlatformAdminPage: React.FC = () => {
     const loadData = async () => {
       try {
         // Queries directas a tablas existentes (sin RPCs)
-        const [usersRes, companiesRes, eventsRes, diagnosticsRes] = await Promise.all([
+        const [usersRes, companiesRes, eventsRes, diagnosticsRes, progressRes] = await Promise.all([
           supabase.from('users').select('id', { count: 'exact', head: true }),
           supabase.from('companies').select('*'),
           supabase.from('analytics_events').select('id, event_name, created_at, company_id, user_id').order('created_at', { ascending: false }).limit(20),
@@ -118,7 +119,8 @@ const PlatformAdminPage: React.FC = () => {
           quizzes_count: 0,
           processes_count: 0,
           actions_completed_count: 0,
-          diagnostics_count: diagnosticsRes.count ?? 0
+          diagnostics_count: diagnosticsRes.count ?? 0,
+          progress_count: progressRes.count ?? 0
         });
 
         setTopics([]);
