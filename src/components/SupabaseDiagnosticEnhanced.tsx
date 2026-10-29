@@ -20,7 +20,8 @@ interface DiagnosticFormData {
 
 type AreaStatus = 'defined' | 'not_defined';
 
-const STORAGE_FORM_KEY = 'escala:diagnosticForm:v1';
+const STORAGE_FORM_KEY = 'escala:diagnosticForm:v2';
+const STORAGE_STEP_KEY = 'escala:diagnosticStep:v1';
 const STORAGE_RESULT_KEY = 'escala:latestDiagnosticResult:v1';
 
 export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProps> = ({ onComplete }) => {
@@ -38,7 +39,6 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
           interests: []
         };
       }
-
       const parsed = JSON.parse(raw) as Partial<DiagnosticFormData>;
       return {
         contactName: parsed.contactName || '',
@@ -59,8 +59,45 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
       };
     }
   });
+  const [step, setStep] = useState<number>(() => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_STEP_KEY);
+      return raw ? parseInt(raw, 10) : 1;
+    } catch {
+      return 1;
+    }
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [resumeAvailable, setResumeAvailable] = useState(false);
+  const [completed, setCompleted] = useState(false);
+
+  const persistStep = (next: number) => {
+    try {
+      window.localStorage.setItem(STORAGE_STEP_KEY, String(next));
+    } catch {
+      // ignore
+    }
+  };
+
+  const clearSavedForm = () => {
+    try {
+      window.localStorage.removeItem(STORAGE_FORM_KEY);
+      window.localStorage.removeItem(STORAGE_STEP_KEY);
+    } catch {
+      // ignore
+    }
+  };
+
+  const markResumeAvailable = () => {
+    try {
+      const hasForm = Boolean(window.localStorage.getItem(STORAGE_FORM_KEY));
+      const hasResult = Boolean(window.localStorage.getItem(STORAGE_RESULT_KEY));
+      setResumeAvailable(hasForm || hasResult);
+    } catch {
+      setResumeAvailable(false);
+    }
+  };
 
   const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
     return Promise.race([
@@ -235,6 +272,7 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
       }
 
       onComplete(result);
+      finish();
     } catch (error) {
       console.error('Error in diagnostic:', error);
       const message = error instanceof Error ? error.message : 'Error desconocido';
@@ -261,6 +299,30 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
     'Otro'
   ];
 
+  useEffect(() => {
+    markResumeAvailable();
+  }, [formData]);
+
+  useEffect(() => {
+    persistStep(step);
+  }, [step]);
+
+  const goToStep = (next: number) => {
+    setStep(next);
+    persistStep(next);
+  };
+
+  const resumeSaved = () => {
+    setError('');
+    goToStep(1);
+    markResumeAvailable();
+  };
+
+  const finish = () => {
+    clearSavedForm();
+    setCompleted(true);
+  };
+
   return (
     <div className="min-h-screen bg-dark-bg flex items-center justify-center p-4">
       <div className="max-w-4xl w-full">
@@ -273,9 +335,38 @@ export const SupabaseDiagnosticEnhanced: React.FC<SupabaseDiagnosticEnhancedProp
             <p className="text-gray-300 text-lg">
               Transforma tu negocio tradicional en una entidad digital rentable
             </p>
+            <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-400">
+              <span>Paso {step} de 3</span>
+              <span className="h-1.5 w-24 rounded-full bg-gray-700">
+                <span className="block h-full rounded-full bg-gradient-to-r from-electric-blue to-violet" style={{ width: step === 1 ? '33%' : step === 2 ? '66%' : '100%' }} />
+              </span>
+            </div>
+            <div className="mt-3 flex items-center justify-center gap-3">
+              {resumeAvailable && !completed && (
+                <button type="button" onClick={resumeSaved} className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-200 hover:bg-gray-800">
+                  Continuar diagnóstico guardado
+                </button>
+              )}
+              {resumeAvailable && !completed && (
+                <button type="button" onClick={clearSavedForm} className="text-xs px-3 py-1.5 rounded-lg border border-red-700 text-red-200 hover:bg-red-900/40">
+                  Borrar avance guardado
+                </button>
+              )}
+              {completed && (
+                <span className="text-xs px-3 py-1.5 rounded-lg border border-emerald-700 text-emerald-200">
+                  Diagnóstico completado
+                </span>
+              )}
+            </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          {completed ? (
+            <div className="space-y-4 text-center">
+              <p className="text-white text-lg">Ya generaste tu ruta.</p>
+              <p className="text-gray-400 text-sm">Si quieres, puedes generar otra desde tu dashboard o volviendo al inicio.</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-6">
             {/* Contact Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
